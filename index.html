@@ -10,6 +10,8 @@
     <link rel="manifest" href="manifest.json">
     <title>英语阅读助手 - 阅读 + 朗读 + 划词生词 + 背单词卡片</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.5.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root {
             --bg-color: #2d2d2d;
@@ -502,7 +504,7 @@
 
 <div class="control-bar">
     <h1>英语阅读助手</h1>
-    <button class="upload-btn" id="uploadBtn">上传 .txt</button>
+    <button class="upload-btn" id="uploadBtn">上传文件</button>
     <select class="encoding-select" id="docSelect"><option value="">📁 我的文档</option></select>
     <button class="control-btn" id="clearDocBtn">删除当前文档</button>
     <select class="encoding-select" id="encodingSelect">
@@ -567,10 +569,13 @@
 <button class="select-btn" id="selectBtn">+</button>
 
 <script>
+    // pdf.js worker 配置（必须，否则 GitHub Pages 无法加载 worker）
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
     // ============ 1. 状态变量 ============
     let currentUtterance = null;
-    let isReadingText = false;          // 全文阅读标志位
-    let isCyclingVocab = false;         // 生词本循环标志位
+    let isReadingText = false;
+    let isCyclingVocab = false;
     let isPaused = false;
     let currentHighlightedSpan = null;
     let sentenceSpans = [];
@@ -580,30 +585,26 @@
     let dragOver = false;
     let selectionMark = document.getElementById('selectBtn');
 
-    // 全文阅读队列状态
     let fullTextChunks = [];
     let currentChunkIndex = 0;
     let fullTextTimer = null;
 
-    // 生词本循环状态
     let cycleIndex = 0;
     let cycleTimer = null;
 
-    // 复习模式状态
-    let currentMode = 'read';           // 'read' | 'review'
-    let reviewWords = [];               // 生词本副本
-    let currentReviewWord = null;       // 当前正在复习的单词对象
-    let dailyReviewCount = 0;           // 今日已复习计数
-    let wordLevels = {};                // { word: level } 0=不认识 1=模糊 2=太简单
-    let wordWeights = {};               // { word: weight } 1=太简单 3=模糊 5=不认识
-    let wordDefinitions = {};           // { word: {phonetic, pos, def} }
-    let reviewPool = [];                // 当前轮次待复习词
-    let retiredThisRound = new Set();   // 本轮已退出（点太简单）的词
+    let currentMode = 'read';
+    let reviewWords = [];
+    let currentReviewWord = null;
+    let dailyReviewCount = 0;
+    let wordLevels = {};
+    let wordWeights = {};
+    let wordDefinitions = {};
+    let reviewPool = [];
+    let retiredThisRound = new Set();
 
-    // 多文档库状态
-    let documents = [];                 // [{ id, name, content }]
-    let currentDocId = null;            // 当前正在查看的文档 id
-    let docIdCounter = 1;               // 文档 id 计数器
+    let documents = [];
+    let currentDocId = null;
+    let docIdCounter = 1;
 
     // ============ 2. DOM 缓存 ============
     const textArea = document.getElementById('textArea');
@@ -621,7 +622,6 @@
     const vocabBar = document.getElementById('vocabBar');
     const cycleBtn = document.getElementById('cycleBtn');
 
-    // 模式切换相关 DOM
     const modeReadBtn = document.getElementById('modeRead');
     const modeReviewBtn = document.getElementById('modeReview');
     const reviewPanel = document.getElementById('reviewPanel');
@@ -652,16 +652,13 @@
             if (savedCount) dailyReviewCount = parseInt(savedCount);
             updateReviewStats();
 
-            // 加载多文档库
             const savedDocs = localStorage.getItem('documents');
             if (savedDocs) {
                 documents = JSON.parse(savedDocs);
-                // 找出最大 id，避免重复
                 if (documents.length > 0) {
                     docIdCounter = Math.max(...documents.map(d => d.id)) + 1;
                 }
                 renderDocSelect();
-                // 自动加载第一个文档（如果没有当前文档）
                 if (documents.length > 0 && !currentDocId) {
                     currentDocId = documents[0].id;
                     docSelect.value = currentDocId;
@@ -677,7 +674,6 @@
             localStorage.setItem('wordWeights', JSON.stringify(wordWeights));
             localStorage.setItem('wordDefinitions', JSON.stringify(wordDefinitions));
             localStorage.setItem('dailyReviewCount', dailyReviewCount);
-            // 保存文档库
             localStorage.setItem('documents', JSON.stringify(documents));
         } catch (e) { console.log('保存持久化数据失败:', e); }
     }
@@ -686,7 +682,6 @@
         if (reviewStats) reviewStats.textContent = `今日已复习：${dailyReviewCount} 个单词`;
     }
 
-    // 渲染文档库下拉菜单
     function renderDocSelect() {
         if (!docSelect) return;
         docSelect.innerHTML = '<option value="">📁 我的文档</option>';
@@ -699,11 +694,8 @@
         if (currentDocId) docSelect.value = currentDocId;
     }
 
-    // 保存文档到多文档库（防覆盖，支持去重）
     function saveDocument(docId, docName, content) {
         if (!content || content.trim().length === 0) return;
-
-        // 从 localStorage 读取已有数组（确保拿到最新）
         let docs = [];
         try {
             const raw = localStorage.getItem('documents');
@@ -712,8 +704,6 @@
             console.log('读取文档库失败:', e);
             docs = [];
         }
-
-        // 去重：同名文件覆盖旧的
         const existingIdx = docs.findIndex(d => d.name === docName);
         if (existingIdx >= 0) {
             docs[existingIdx].content = content;
@@ -724,11 +714,7 @@
             docs.push({ id: newId, name: docName, content: content });
             currentDocId = newId;
         }
-
-        // 更新内存数组
         documents = docs;
-
-        // 存回 localStorage
         try {
             localStorage.setItem('documents', JSON.stringify(docs));
             console.log('当前文档库数量:', docs.length);
@@ -739,29 +725,24 @@
                 console.log('保存文档库失败:', e);
             }
         }
-
-        // 刷新下拉菜单
         renderDocSelect();
     }
 
-    // 初始化持久化数据
     loadPersistentData();
 
     // ============ 4. 上传按钮 ============
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
-    fileInput.accept = '.txt,.docx';
+    fileInput.accept = '.txt,.docx,.xlsx,.pdf';
     fileInput.style.display = 'none';
     fileInput.id = 'fileInput';
     document.body.appendChild(fileInput);
 
     uploadBtn.addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
 
-    // 清空文档按钮（现改为删除当前文档）
     clearDocBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (currentDocId === null) { showToast('没有可删除的文档'); return; }
-        // 从数组中删除
         documents = documents.filter(d => d.id !== currentDocId);
         try {
             localStorage.setItem('documents', JSON.stringify(documents));
@@ -778,7 +759,6 @@
         showToast('文档已删除');
     });
 
-    // 文档库下拉菜单切换
     docSelect.addEventListener('change', (e) => {
         e.stopPropagation();
         const val = e.target.value;
@@ -799,8 +779,12 @@
             readFileWithEncoding(file, file.name);
         } else if (lower.endsWith('.docx')) {
             readDocx(file);
+        } else if (lower.endsWith('.xlsx')) {
+            readXlsx(file);
+        } else if (lower.endsWith('.pdf')) {
+            readPdf(file);
         } else {
-            showToast('请选择 .txt 或 .docx 文件');
+            showToast('不支持此格式，请先转为 .txt 或 .docx 后再上传');
             e.target.value = '';
             return;
         }
@@ -819,7 +803,9 @@
             const lower = file.name.toLowerCase();
             if (lower.endsWith('.txt')) { readFileWithEncoding(file, file.name); }
             else if (lower.endsWith('.docx')) { readDocx(file); }
-            else { showToast('请拖入 .txt 或 .docx 文件'); }
+            else if (lower.endsWith('.xlsx')) { readXlsx(file); }
+            else if (lower.endsWith('.pdf')) { readPdf(file); }
+            else { showToast('请拖入 .txt、.docx、.xlsx 或 .pdf 文件'); }
         }
     });
 
@@ -828,7 +814,6 @@
 
     function readFileWithEncoding(file, fileName) {
         const reader = new FileReader();
-
         reader.onload = (event) => {
             let text = '';
             try {
@@ -850,16 +835,13 @@
             }
             console.log('文件读取完成，长度:', text.length);
             resetStateAndRender(text, null, fileName);
-            // 保存到多文档库（防覆盖，支持去重）
             saveDocument(null, fileName, text);
         };
-
         reader.onerror = () => {
             console.error('FileReader error');
             showToast('文件读取失败');
             resetStateAndRender('');
         };
-
         try { reader.readAsArrayBuffer(file); }
         catch (e) {
             console.log('readAsArrayBuffer 失败，回退:', e);
@@ -872,7 +854,7 @@
         }
     }
 
-    // ============ 7. 读取 Word (.docx) 文件 ============
+    // ============ 7. 读取 Word (.docx) ============
     function readDocx(file) {
         const reader = new FileReader();
         reader.onload = (event) => {
@@ -889,14 +871,74 @@
                     resetStateAndRender('');
                 });
         };
-        reader.onerror = () => {
-            showToast('文件读取失败');
-            resetStateAndRender('');
-        };
+        reader.onerror = () => { showToast('文件读取失败'); resetStateAndRender(''); };
         reader.readAsArrayBuffer(file);
     }
 
-    // ============ 8. 重置并渲染（仅负责把文本显示到 #textArea，不保存）============
+    // ============ 8. 读取 Excel (.xlsx) ============
+    function readXlsx(file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                let text = '';
+                workbook.SheetNames.forEach(sheetName => {
+                    const sheet = workbook.Sheets[sheetName];
+                    text += `【工作表：${sheetName}】\n`;
+                    const range = XLSX.utils.decode_range(sheet['!ref']);
+                    for (let R = range.s.r; R <= range.e.r; R++) {
+                        let row = [];
+                        for (let C = range.s.c; C <= range.e.c; C++) {
+                            const cell = sheet[XLSX.utils.encode_cell({r: R, c: C})];
+                            if (cell) row.push(cell.v ? cell.v.toString() : '');
+                        }
+                        text += row.join('\t') + '\n';
+                    }
+                    text += '\n';
+                });
+                resetStateAndRender(text, null, file.name);
+                saveDocument(null, file.name, text);
+            } catch (e) {
+                console.error('xlsx 读取失败', e);
+                showToast('Excel 文件读取失败');
+                resetStateAndRender('');
+            }
+        };
+        reader.onerror = () => { showToast('文件读取失败'); resetStateAndRender(''); };
+        reader.readAsArrayBuffer(file);
+    }
+
+    // ============ 9. 读取 PDF (.pdf) ============
+    function readPdf(file) {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const arrayBuffer = event.target.result;
+                const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
+                const pdf = await loadingTask.promise;
+                let text = '';
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const content = await page.getTextContent();
+                    content.items.forEach(item => {
+                        if (item.str) text += item.str + ' ';
+                    });
+                    text += '\n';
+                }
+                resetStateAndRender(text, null, file.name);
+                saveDocument(null, file.name, text);
+            } catch (e) {
+                console.error('pdf 读取失败', e);
+                showToast('PDF 文件读取失败');
+                resetStateAndRender('');
+            }
+        };
+        reader.onerror = () => { showToast('文件读取失败'); resetStateAndRender(''); };
+        reader.readAsArrayBuffer(file);
+    }
+
+    // ============ 10. 重置并渲染 ============
     function resetStateAndRender(text, docId, docName) {
         if (!textArea) { console.error('textArea 不存在'); return; }
         textArea.innerHTML = '';
@@ -913,20 +955,18 @@
             currentHighlightedSpan = null;
         }
         renderText(text);
-
-        // 更新当前文档 ID 和下拉菜单选中状态（只在传入 docId 时更新）
         if (docId) currentDocId = docId;
         if (docSelect && docId) docSelect.value = docId;
     }
 
-    // ============ 9. 分句并渲染到 DOM ============
+    // ============ 11. 分句并渲染 ============
     function renderText(text) {
         if (!textArea) return;
         textArea.innerHTML = '';
         sentenceSpans = [];
         allSentences = [];
         if (!text || text.trim().length === 0) {
-            textArea.innerHTML = '请上传 .txt 或 .docx 文件开始阅读';
+            textArea.innerHTML = '请上传 .txt、.docx、.xlsx 或 .pdf 文件开始阅读';
             textArea.classList.add('empty');
             return;
         }
@@ -951,7 +991,7 @@
         console.log('渲染完成，句子数:', allSentences.length);
     }
 
-    // ============ 10. 停止所有 TTS（单向，绝不互相调用）============
+    // ============ 12. 停止所有 TTS ============
     function stopAllTTS() {
         if (fullTextTimer) { clearTimeout(fullTextTimer); fullTextTimer = null; }
         if (cycleTimer) { clearTimeout(cycleTimer); cycleTimer = null; }
@@ -972,12 +1012,12 @@
         cycleBtn.classList.remove('cycling');
     }
 
-    // ============ 11. 全文阅读：文本深度清洗 ============
+    // ============ 13. 全文阅读：清洗 ============
     function cleanText(text) {
         return text.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
     }
 
-    // ============ 12. 全文阅读：按句末标点切分，短句合并，绝不按空格切单词 ============
+    // ============ 14. 全文阅读：分句 ============
     function splitIntoChunks(text) {
         const rawSentences = [];
         const separatorRegex = /([.!?]+|\n)/;
@@ -998,7 +1038,6 @@
         if (buf && buf.trim().length > 0) {
             rawSentences.push(buf.trim());
         }
-
         const chunks = [];
         let i = 0;
         while (i < rawSentences.length) {
@@ -1010,27 +1049,22 @@
             }
             chunks.push(chunk);
         }
-
         return chunks;
     }
 
-    // ============ 13. 全文阅读：带缓冲的队列播放 ============
+    // ============ 15. 全文阅读：播放 ============
     function playFullText(text) {
         stopCycleTTS();
         speechSynthesis.cancel();
-
         const cleaned = cleanText(text);
         if (!cleaned) return;
-
         fullTextChunks = splitIntoChunks(cleaned);
         currentChunkIndex = 0;
         isReadingText = true;
-
         isPaused = false;
         playBtn.style.display = 'none';
         pauseBtn.style.display = 'inline-block';
         stopBtn.style.display = 'inline-block';
-
         speakNextFullTextChunk();
     }
 
@@ -1050,10 +1084,8 @@
             showToast('全文朗读完成');
             return;
         }
-
         const chunk = fullTextChunks[currentChunkIndex];
         currentChunkIndex++;
-
         try {
             const utterance = new SpeechSynthesisUtterance(chunk);
             utterance.rate = parseFloat(speedSlider.value) || 1.0;
@@ -1064,16 +1096,12 @@
                 const voice = voices.find(v => v.name === voiceName);
                 if (voice) utterance.voice = voice;
             }
-
             utterance.onend = () => {
                 currentUtterance = null;
                 if (isReadingText && !isPaused) {
-                    fullTextTimer = setTimeout(() => {
-                        speakNextFullTextChunk();
-                    }, 120);
+                    fullTextTimer = setTimeout(() => { speakNextFullTextChunk(); }, 120);
                 }
             };
-
             utterance.onerror = (e) => {
                 currentUtterance = null;
                 if (e.error === 'interrupted' || e.error === 'canceled') return;
@@ -1088,7 +1116,6 @@
                     alert('全文朗读失败: ' + (e.error || '未知错误'));
                 }
             };
-
             speechSynthesis.speak(utterance);
             currentUtterance = utterance;
         } catch (e) {
@@ -1096,11 +1123,11 @@
         }
     }
 
-    // ============ 14. 播放/暂停/停止按钮 ============
+    // ============ 16. 按钮事件 ============
     playBtn.addEventListener('click', () => {
         const text = textArea.textContent || textArea.innerText;
-        if (!text || text.trim() === '请上传 .txt 或 .docx 文件开始阅读' || text.trim() === '') {
-            showToast('请先上传 .txt 或 .docx 文件'); return;
+        if (!text || text.trim() === '请上传 .txt、.docx、.xlsx 或 .pdf 文件开始阅读' || text.trim() === '') {
+            showToast('请先上传文件'); return;
         }
         if (isReadingText) {
             speechSynthesis.cancel();
@@ -1124,14 +1151,12 @@
         stopAllTTS();
     });
 
-    // ============ 15. 语音/语速 ============
+    // ============ 17. 语音/语速 ============
     voiceSelect.addEventListener('change', () => { stopAllTTS(); setTimeout(() => { try { speechSynthesis.getVoices(); } catch (e) { console.log('getVoices:', e); } }, 100); });
     speedSlider.addEventListener('input', () => { speedValue.textContent = speedSlider.value + 'x'; if (isReadingText && currentUtterance) currentUtterance.rate = parseFloat(speedSlider.value); });
 
-    // ============ 16. 语音错误监听 ============
     window.speechSynthesis.onerror = (e) => { console.log('synthesis onerror:', e); alert('朗读引擎错误: ' + (e.error || '未知')); stopAllTTS(); };
 
-    // ============ 17. 语音列表加载 ============
     let voiceInterval = setInterval(() => {
         try {
             const voices = speechSynthesis.getVoices();
@@ -1148,7 +1173,7 @@
         } catch (e) { console.log('语音列表:', e); }
     }, 200);
 
-    // ============ 18. 生词本（保留，不动）============
+    // ============ 18. 生词本 ============
     function addToVocabFromSelection() {
         const selection = window.getSelection();
         if (!selection || selection.toString().trim().length === 0) return;
@@ -1199,7 +1224,7 @@
     try { const saved = localStorage.getItem('vocabulary'); if (saved) vocabulary = JSON.parse(saved); } catch (e) { console.log('localStorage:', e); }
     renderVocab();
 
-    // ============ 19. 单词单独朗读（保留，不动）============
+    // ============ 19. 单词单独朗读 ============
     function speakSingleWord(word) {
         stopCycleTTS();
         stopAllTTS();
@@ -1227,7 +1252,7 @@
         }
     }
 
-    // ============ 20. 生词本循环朗读（隔离状态，单向调用）============
+    // ============ 20. 生词本循环朗读 ============
     function toggleCycleVocab() {
         if (isCyclingVocab) { stopCycleTTS(); return; }
         if (vocabulary.length === 0) { showToast('生词本为空'); return; }
@@ -1321,28 +1346,22 @@
     modeReadBtn.addEventListener('click', () => switchMode('read'));
     modeReviewBtn.addEventListener('click', () => switchMode('review'));
 
-    // 复习卡片：加载生词本副本，初始化本轮复习池（按权重）
     function loadReviewWords() {
         reviewWords = [...vocabulary];
         retiredThisRound = new Set();
-        // 初始化本轮复习池：排除已标记为“太简单”的词（权重为 1 且已退出）
         reviewPool = reviewWords.filter(w => {
             return !(wordLevels[w.word] === 2);
         });
         currentReviewWord = null;
     }
 
-    // 按权重加权随机抽取下一个单词（排除本轮已退出的词）
     function pickNextWord() {
         const candidates = reviewPool.filter(w => !retiredThisRound.has(w.word));
         if (candidates.length === 0) {
-            // 本轮全部退出，重置池子重新开始（保留退出标记，避免无限循环时全部退出）
             if (reviewPool.length === 0) return null;
-            // 若全部被退出，清空退出集重新进入下一轮
             retiredThisRound.clear();
             return pickNextWord();
         }
-        // 计算总权重
         let totalWeight = 0;
         for (const w of candidates) {
             totalWeight += getWordWeight(w.word);
@@ -1356,26 +1375,21 @@
         return candidates[candidates.length - 1];
     }
 
-    // 获取单词权重：优先用 wordWeights，没有则按 level 推断（不认识=5，模糊=3，太简单=1）
     function getWordWeight(word) {
         if (wordWeights[word] !== undefined) return wordWeights[word];
         const level = wordLevels[word] || 0;
         return level === 0 ? 5 : level === 1 ? 3 : 1;
     }
 
-    // 复习卡片：显示当前单词（单面布局，无翻转）
     function showReviewCard() {
         cardWord.textContent = '';
         pronounceRow.innerHTML = '';
         cardDef.innerHTML = '';
         cardLoading.innerHTML = '';
         cardEmpty.style.display = 'none';
-
-        // 重置按钮状态
         lvl0Btn.classList.remove('selected');
         lvl1Btn.classList.remove('selected');
         lvl2Btn.classList.remove('selected');
-
         if (!reviewWords || reviewWords.length === 0) {
             cardEmpty.style.display = 'block';
             addDefBtn.style.display = 'none';
@@ -1385,8 +1399,6 @@
             currentReviewWord = null;
             return;
         }
-
-        // 抽取下一个单词
         const next = pickNextWord();
         if (!next) {
             cardEmpty.style.display = 'block';
@@ -1398,25 +1410,19 @@
             currentReviewWord = null;
             return;
         }
-
         currentReviewWord = next;
         addDefBtn.style.display = 'inline-block';
         lvl0Btn.style.display = 'inline-block';
         lvl1Btn.style.display = 'inline-block';
         lvl2Btn.style.display = 'inline-block';
-
         const word = currentReviewWord.word;
         cardWord.textContent = word;
-
-        // 检查是否已有释义缓存（优先显示本地用户添加的中文释义）
         const cached = wordDefinitions[word];
         const cachedDefTooLong = cached && cached.def && cached.def.length > 50;
         const hasCachedZh = cached && cached.zh && cached.zh !== '翻译请求超时' && cached.zh !== '暂无中文翻译';
         if (cached && !cachedDefTooLong && hasCachedZh) {
-            // 有缓存且中文翻译有效，直接渲染，无需查词
             renderCard(word, cached.phonetic, cached.pos, cached.def, cached.zh);
         } else {
-            // 无缓存或缓存中文翻译无效或英文释义过长（旧缓存），重新查词
             cardLoading.innerHTML = `
                 <div class="card-loading">
                     <div class="loading-spinner"></div>
@@ -1439,22 +1445,16 @@
                 addSpeakBtn(word);
             });
         }
-
-        // 高亮对应熟练度按钮
         const currentLevel = wordLevels[word] || 0;
         if (currentLevel === 0) lvl0Btn.classList.add('selected');
         else if (currentLevel === 1) lvl1Btn.classList.add('selected');
         else if (currentLevel === 2) lvl2Btn.classList.add('selected');
     }
 
-    // 渲染单面卡片内容
     function renderCard(word, phonetic, pos, defEn, defZh) {
-        // 单词：彻底强行放大，直接内联样式
         cardWord.textContent = word;
         cardWord.style.cssText = 'font-size: 56px !important; font-weight: 800; color: #fff; margin-bottom: 10px; word-break: break-word;';
         cardLoading.innerHTML = '';
-
-        // 构建音标 + 发音按钮行（音标和喇叭强制缩小，直接内联样式）
         pronounceRow.innerHTML = '';
         if (phonetic) {
             const phSpan = document.createElement('span');
@@ -1463,19 +1463,12 @@
             phSpan.style.cssText = 'font-size: 16px !important; color: #aaa; margin-bottom: 20px;';
             pronounceRow.appendChild(phSpan);
         }
-
-        // 发音按钮（小图标形式），强制缩小
         const speakBtn = document.createElement('button');
         speakBtn.textContent = '🔊';
         speakBtn.className = 'add-def-btn';
         speakBtn.style.cssText = 'font-size: 16px !important; color: #aaa; margin-bottom: 20px; padding: 4px 8px; border: none; background: transparent; cursor: pointer;';
-        speakBtn.onclick = (e) => {
-            e.stopPropagation();
-            speakSingleWord(word);
-        };
+        speakBtn.onclick = (e) => { e.stopPropagation(); speakSingleWord(word); };
         pronounceRow.appendChild(speakBtn);
-
-        // 释义区域：同义词（英文，简洁，同行逗号隔开）+ 中文翻译（必现）
         let defHtml = '';
         if (defEn) {
             defHtml += `<div class="card-def-syn" style="font-size:14px;color:#999999;line-height:1.5;word-break:break-all;margin-bottom:8px;">同义词：${defEn}</div>`;
@@ -1485,57 +1478,35 @@
         cardDef.innerHTML = defHtml || `<div class="card-def">暂无释义，点击手动添加</div>`;
     }
 
-    // 仅添加发音按钮（用于无释义时的兜底），强制缩小
     function addSpeakBtn(word) {
         pronounceRow.innerHTML = '';
         const speakBtn = document.createElement('button');
         speakBtn.textContent = '🔊';
         speakBtn.className = 'add-def-btn';
         speakBtn.style.cssText = 'font-size: 16px !important; color: #aaa; margin-bottom: 20px; padding: 4px 8px; border: none; background: transparent; cursor: pointer;';
-        speakBtn.onclick = (e) => {
-            e.stopPropagation();
-            speakSingleWord(word);
-        };
+        speakBtn.onclick = (e) => { e.stopPropagation(); speakSingleWord(word); };
         pronounceRow.appendChild(speakBtn);
         cardDef.innerHTML = '';
     }
 
-    // 自动查词 API（英文词典 + Google 中文翻译，3秒熔断 + 8秒总超时，Promise.all 并发）
     async function fetchDefinition(word) {
         console.log('开始查词：', word);
-
-        // 对多词短语：优先用完整短语查询，失败则只取第一个单词
         const queryWords = word.trim().split(/\s+/);
         const firstWord = queryWords[0];
         const queries = [word.trim(), firstWord];
-
-        // 带 3 秒超时熔断的 fetch 封装
         function fetchWithTimeout3s(url) {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), 3000);
-            return fetch(url, { signal: controller.signal })
-                .finally(() => clearTimeout(timer));
+            return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
         }
-
-        // ========== 任务1：英文词典（dictionaryapi.dev，3秒熔断） ==========
         const dictTask = (async () => {
             for (const q of queries) {
                 try {
-                    console.log('词典API请求：', q);
                     const response = await fetchWithTimeout3s(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(q)}`);
-                    if (response.status === 404) {
-                        console.log('词典API返回：', q, '查无此词');
-                        continue;
-                    }
-                    if (!response.ok) {
-                        console.log('词典API返回：', q, '状态', response.status);
-                        continue;
-                    }
+                    if (response.status === 404) { continue; }
+                    if (!response.ok) { continue; }
                     const data = await response.json();
-                    if (!data || data.length === 0) {
-                        console.log('词典API返回：', q, '无数据');
-                        continue;
-                    }
+                    if (!data || data.length === 0) { continue; }
                     const entry = data[0];
                     const phonetic = entry.phonetic || '';
                     let pos = '';
@@ -1543,61 +1514,33 @@
                     if (entry.meanings && entry.meanings.length > 0) {
                         const firstMeaning = entry.meanings[0];
                         pos = firstMeaning.partOfSpeech || '';
-                        // 提取同义词（2-3个短单词），过滤掉长句子，替代长篇英文解释
                         const synonyms = firstMeaning.synonyms || [];
-                        const synList = synonyms
-                            .filter(s => s && s.length > 0 && s.length <= 20)
-                            .slice(0, 3);
+                        const synList = synonyms.filter(s => s && s.length > 0 && s.length <= 20).slice(0, 3);
                         def = synList.length > 0 ? synList.join('，') : '';
                     }
-                    console.log('词典API返回：', q, { phonetic, pos, def, synonyms: entry.meanings[0]?.synonyms });
                     return { phonetic, pos, def, source: 'dictionaryapi' };
-                } catch (error) {
-                    console.log('词典API请求失败：', q, error);
-                    continue;
-                }
+                } catch (error) { continue; }
             }
             return { phonetic: '', pos: '', def: '', source: 'dictionaryapi' };
         })();
-
-        // ========== 任务2：中文翻译（Google 翻译接口，3秒熔断，必须渲染） ==========
         const transTask = (async () => {
             try {
-                console.log(' 🔥 开始请求中文...', word);
                 const transRes = await fetchWithTimeout3s(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-CN&dt=t&q=${encodeURIComponent(word)}`);
                 const transData = await transRes.json();
-                console.log(' ✅ 翻译成功或报错', transData);
                 let zhText = '翻译请求超时';
                 if (Array.isArray(transData) && transData[0] && transData[0][0] && transData[0][0][0]) {
                     zhText = transData[0][0][0];
                 }
                 return zhText;
-            } catch (e) {
-                console.log(' ✅ 翻译成功或报错', e);
-                return '翻译请求超时';
-            }
+            } catch (e) { return '翻译请求超时'; }
         })();
-
-        // ========== Promise.all 并发等待（带 8 秒总超时，防止挂起） ==========
-        const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('查词总超时')), 8000);
-        });
-        const [dictResult, zhTranslation] = await Promise.race([
-            Promise.all([dictTask, transTask]),
-            timeoutPromise
-        ]);
-
+        const timeoutPromise = new Promise((_, reject) => { setTimeout(() => reject(new Error('查词总超时')), 8000); });
+        const [dictResult, zhTranslation] = await Promise.race([Promise.all([dictTask, transTask]), timeoutPromise]);
         const hasDef = dictResult && dictResult.def && dictResult.def.trim().length > 0;
         const hasZh = zhTranslation && zhTranslation !== '翻译请求超时' && zhTranslation !== '暂无中文翻译';
-
-        // 兜底：如果英文和中文都没查到，返回 not_found
         if (!hasDef && !hasZh) {
-            console.log('[翻译失败] 英文和中文都查无此词：', word);
             return { found: false, status: 'not_found' };
         }
-
-        console.log('查词完成：', word, '英文释义=', dictResult.def, '中文翻译=', zhTranslation);
-
         return {
             found: true,
             status: 'ok',
@@ -1609,76 +1552,40 @@
         };
     }
 
-    // 点击卡片不再翻转，改为直接点击发音（可选交互）
-    reviewCard.addEventListener('click', (e) => {
-        // 不触发翻转，单面卡片直接显示所有内容
-        // 如果点击在发音按钮上，由按钮自身处理
-    });
+    reviewCard.addEventListener('click', (e) => {});
 
-    // 切换单词时累加今日复习计数
     function incrementDailyReview() {
         dailyReviewCount++;
         updateReviewStats();
         savePersistentData();
     }
 
-    // 上一个（按权重重新抽词）
-    cardPrev.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (reviewWords.length === 0) return;
-        incrementDailyReview();
-        showReviewCard();
-    });
+    cardPrev.addEventListener('click', (e) => { e.stopPropagation(); if (reviewWords.length === 0) return; incrementDailyReview(); showReviewCard(); });
+    cardNext.addEventListener('click', (e) => { e.stopPropagation(); if (reviewWords.length === 0) return; incrementDailyReview(); showReviewCard(); });
 
-    // 下一个（按权重重新抽词）
-    cardNext.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (reviewWords.length === 0) return;
-        incrementDailyReview();
-        showReviewCard();
-    });
-
-    // 添加释义按钮
     addDefBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (!currentReviewWord) return;
         const word = currentReviewWord.word;
         const userDef = prompt(`请为单词 "${word}" 输入中文释义：`);
         if (userDef !== null && userDef.trim() !== '') {
-            wordDefinitions[word] = {
-                phonetic: '',
-                pos: '',
-                def: '',
-                zh: userDef.trim()
-            };
+            wordDefinitions[word] = { phonetic: '', pos: '', def: '', zh: userDef.trim() };
             savePersistentData();
             renderCard(word, '', '', '', userDef.trim());
             showToast('释义已保存');
         }
     });
 
-    // 记忆分级按钮（点击后自动按权重切到下一张）
-    lvl0Btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        setWordLevel(0);
-    });
-    lvl1Btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        setWordLevel(1);
-    });
-    lvl2Btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        setWordLevel(2);
-    });
+    lvl0Btn.addEventListener('click', (e) => { e.stopPropagation(); setWordLevel(0); });
+    lvl1Btn.addEventListener('click', (e) => { e.stopPropagation(); setWordLevel(1); });
+    lvl2Btn.addEventListener('click', (e) => { e.stopPropagation(); setWordLevel(2); });
 
     function setWordLevel(level) {
         if (!currentReviewWord) return;
         const word = currentReviewWord.word;
         wordLevels[word] = level;
-        // 权重机制：不认识=5，模糊=3，太简单=1
         wordWeights[word] = level === 0 ? 5 : level === 1 ? 3 : 1;
         savePersistentData();
-        // 高亮按钮
         lvl0Btn.classList.remove('selected');
         lvl1Btn.classList.remove('selected');
         lvl2Btn.classList.remove('selected');
@@ -1686,45 +1593,38 @@
         else if (level === 1) lvl1Btn.classList.add('selected');
         else if (level === 2) lvl2Btn.classList.add('selected');
         showToast(`已标记：${word} - ${level === 0 ? '不认识' : level === 1 ? '模糊' : '太简单'}`);
-        // 分级后自动切换下一张（不等待点击下一个）
         incrementDailyReview();
-        // 点【太简单】后，该词在本轮不再出现
-        if (level === 2) {
-            retiredThisRound.add(word);
-        }
+        if (level === 2) { retiredThisRound.add(word); }
         showReviewCard();
     }
 
-    // ============ 22. 划词交互（保留，不动）============
+    // ============ 22. 划词交互 ============
     textArea.addEventListener('mouseup', (e) => { const selection = window.getSelection(); if (selection && selection.toString().trim().length > 0) selectionMark.style.display = 'block'; });
     selectionMark.addEventListener('click', (e) => { e.stopPropagation(); addToVocabFromSelection(); selectionMark.style.display = 'none'; });
     document.addEventListener('click', (e) => { if (!e.target.closest('#textArea') && !e.target.closest('.select-btn') && !e.target.closest('#vocabBar')) selectionMark.style.display = 'none'; });
     document.addEventListener('keydown', (e) => { if (e.code === 'Escape') { stopAllTTS(); selectionMark.style.display = 'none'; } });
 
-    // ============ 23. Toast（保留，不动）============
+    // ============ 23. Toast ============
     function showToast(msg) { toast.textContent = msg; toast.classList.add('visible'); setTimeout(() => toast.classList.remove('visible'), 3000); }
 
-    // ============ 24. 主题（保留，不动）============
+    // ============ 24. 主题 ============
     const themeToggle = document.getElementById('themeToggle');
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme) document.body.setAttribute('data-theme', savedTheme);
     themeToggle.addEventListener('click', () => { const cur = document.body.getAttribute('data-theme'); const nxt = cur === 'light' ? 'dark' : 'light'; document.body.setAttribute('data-theme', nxt); localStorage.setItem('theme', nxt); });
 
-    // ============ 25. Shift + 滚轮缩放正文字体（新增，不影响 TTS 逻辑）============
+    // ============ 25. Shift + 滚轮缩放 ============
     let currentFontSize = 18;
     textArea.addEventListener('wheel', (e) => {
         if (e.shiftKey) {
             e.preventDefault();
-            if (e.deltaY < 0) {
-                currentFontSize = Math.min(currentFontSize + 1, 36);
-            } else if (e.deltaY > 0) {
-                currentFontSize = Math.max(currentFontSize - 1, 14);
-            }
+            if (e.deltaY < 0) { currentFontSize = Math.min(currentFontSize + 1, 36); }
+            else if (e.deltaY > 0) { currentFontSize = Math.max(currentFontSize - 1, 14); }
             textArea.style.fontSize = currentFontSize + 'px';
         }
     }, { passive: false });
 
-    console.log('英语阅读助手已加载（含复习模式 + 自动查词 + 记忆分级 + PWA + Word 支持）');
+    console.log('英语阅读助手已加载（含 txt/docx/xlsx/pdf 支持）');
 
     // ============ PWA Service Worker 注册 ============
     if ('serviceWorker' in navigator) {
