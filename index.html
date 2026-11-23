@@ -1614,10 +1614,12 @@
 
     // ============ 23. 划词交互（PC + 手机触摸） ============
     function showSelectionMark() {
-        const selection = window.getSelection();
-        if (selection && selection.toString().trim().length > 0) {
-            selectionMark.style.display = 'block';
-        }
+        setTimeout(() => {
+            const selection = window.getSelection();
+            if (selection && selection.toString().trim().length > 0) {
+                selectionMark.style.display = 'block';
+            }
+        }, 100);
     }
     textArea.addEventListener('mouseup', showSelectionMark);
     textArea.addEventListener('touchend', showSelectionMark);
