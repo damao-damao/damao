@@ -517,7 +517,7 @@
         <button class="control-btn" id="pauseBtn" style="display: none;">暂停</button>
         <button class="control-btn" id="stopBtn" style="display: none;">停止</button>
     </div>
-    <select class="voice-select" id="voiceSelect"><option value="">选择语音</option></select>
+    <select class="voice-select" id="voiceSelect"><option value="">加载语音中...</option></select>
     <div class="speed-control">
         <input type="range" id="speedSlider" min="0.5" max="1.5" step="0.1" value="1">
         <span class="speed-value" id="speedValue">1.0x</span>
@@ -639,7 +639,34 @@
     const lvl1Btn = document.getElementById('lvl1Btn');
     const lvl2Btn = document.getElementById('lvl2Btn');
 
-    // ============ 3. 初始化持久化数据 ============
+    // ============ 3. 语音合成初始化（移动端兜底） ============
+    let voicesLoaded = false;
+
+    function loadVoices() {
+        const voices = speechSynthesis.getVoices();
+        voiceSelect.innerHTML = '<option value="">使用系统默认语音</option>';
+        if (voices.length > 0) {
+            voices.forEach(v => {
+                const o = document.createElement('option');
+                o.value = v.name;
+                o.textContent = v.name + ' (' + v.lang + ')';
+                voiceSelect.appendChild(o);
+            });
+        } else {
+            voiceSelect.innerHTML = '<option value="">无可用语音</option>';
+        }
+        voicesLoaded = true;
+    }
+
+    // 页面加载时尝试加载语音
+    window.addEventListener('load', () => {
+        loadVoices();
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = loadVoices;
+        }
+    });
+
+    // ============ 4. 初始化持久化数据 ============
     function loadPersistentData() {
         try {
             const savedLevels = localStorage.getItem('wordLevels');
@@ -730,7 +757,7 @@
 
     loadPersistentData();
 
-    // ============ 4. 上传按钮 ============
+    // ============ 5. 上传按钮（支持多种格式） ============
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = '.txt,.docx,.xlsx,.pdf';
@@ -790,7 +817,7 @@
         }
     });
 
-    // ============ 5. 拖拽上传 ============
+    // ============ 6. 拖拽上传 ============
     const textAreaDiv = textArea;
     document.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); if (e.target === textAreaDiv) { textAreaDiv.style.borderColor = '#ffd700'; dragOver = true; } });
     document.addEventListener('dragleave', (e) => { e.preventDefault(); e.stopPropagation(); if (e.target === textAreaDiv) { textAreaDiv.style.borderColor = ''; dragOver = false; } });
@@ -809,7 +836,7 @@
         }
     });
 
-    // ============ 6. 文件读取（稳健版）============
+    // ============ 7. 文件读取（稳健版）============
     function normalizeEncoding(enc) { return enc === 'gbk' ? 'gb18030' : enc; }
 
     function readFileWithEncoding(file, fileName) {
@@ -854,7 +881,7 @@
         }
     }
 
-    // ============ 7. 读取 Word (.docx) ============
+    // ============ 8. 读取 Word (.docx) ============
     function readDocx(file) {
         const reader = new FileReader();
         reader.onload = (event) => {
@@ -875,7 +902,7 @@
         reader.readAsArrayBuffer(file);
     }
 
-    // ============ 8. 读取 Excel (.xlsx) ============
+    // ============ 9. 读取 Excel (.xlsx) ============
     function readXlsx(file) {
         const reader = new FileReader();
         reader.onload = (event) => {
@@ -909,7 +936,7 @@
         reader.readAsArrayBuffer(file);
     }
 
-    // ============ 9. 读取 PDF (.pdf) ============
+    // ============ 10. 读取 PDF (.pdf) ============
     function readPdf(file) {
         const reader = new FileReader();
         reader.onload = async (event) => {
@@ -938,7 +965,7 @@
         reader.readAsArrayBuffer(file);
     }
 
-    // ============ 10. 重置并渲染 ============
+    // ============ 11. 重置并渲染 ============
     function resetStateAndRender(text, docId, docName) {
         if (!textArea) { console.error('textArea 不存在'); return; }
         textArea.innerHTML = '';
@@ -959,7 +986,7 @@
         if (docSelect && docId) docSelect.value = docId;
     }
 
-    // ============ 11. 分句并渲染 ============
+    // ============ 12. 分句并渲染 ============
     function renderText(text) {
         if (!textArea) return;
         textArea.innerHTML = '';
@@ -991,7 +1018,7 @@
         console.log('渲染完成，句子数:', allSentences.length);
     }
 
-    // ============ 12. 停止所有 TTS ============
+    // ============ 13. 停止所有 TTS ============
     function stopAllTTS() {
         if (fullTextTimer) { clearTimeout(fullTextTimer); fullTextTimer = null; }
         if (cycleTimer) { clearTimeout(cycleTimer); cycleTimer = null; }
@@ -1012,12 +1039,12 @@
         cycleBtn.classList.remove('cycling');
     }
 
-    // ============ 13. 全文阅读：清洗 ============
+    // ============ 14. 全文阅读：清洗 ============
     function cleanText(text) {
         return text.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
     }
 
-    // ============ 14. 全文阅读：分句 ============
+    // ============ 15. 全文阅读：分句 ============
     function splitIntoChunks(text) {
         const rawSentences = [];
         const separatorRegex = /([.!?]+|\n)/;
@@ -1052,10 +1079,16 @@
         return chunks;
     }
 
-    // ============ 15. 全文阅读：播放 ============
+    // ============ 16. 全文阅读：播放（语音兜底） ============
     function playFullText(text) {
         stopCycleTTS();
         speechSynthesis.cancel();
+        loadVoices();
+        const voices = speechSynthesis.getVoices();
+        if (voices.length === 0) {
+            showToast('当前浏览器未检测到可用语音，请稍后再试');
+            return;
+        }
         const cleaned = cleanText(text);
         if (!cleaned) return;
         fullTextChunks = splitIntoChunks(cleaned);
@@ -1123,11 +1156,17 @@
         }
     }
 
-    // ============ 16. 按钮事件 ============
+    // ============ 17. 按钮事件（播放前自动加载语音） ============
     playBtn.addEventListener('click', () => {
         const text = textArea.textContent || textArea.innerText;
         if (!text || text.trim() === '请上传 .txt、.docx、.xlsx 或 .pdf 文件开始阅读' || text.trim() === '') {
             showToast('请先上传文件'); return;
+        }
+        loadVoices();
+        const voices = speechSynthesis.getVoices();
+        if (voices.length === 0) {
+            showToast('当前浏览器未检测到可用语音，请稍后再试');
+            return;
         }
         if (isReadingText) {
             speechSynthesis.cancel();
@@ -1151,29 +1190,13 @@
         stopAllTTS();
     });
 
-    // ============ 17. 语音/语速 ============
-    voiceSelect.addEventListener('change', () => { stopAllTTS(); setTimeout(() => { try { speechSynthesis.getVoices(); } catch (e) { console.log('getVoices:', e); } }, 100); });
+    // ============ 18. 语音/语速 ============
+    voiceSelect.addEventListener('change', () => { stopAllTTS(); loadVoices(); });
     speedSlider.addEventListener('input', () => { speedValue.textContent = speedSlider.value + 'x'; if (isReadingText && currentUtterance) currentUtterance.rate = parseFloat(speedSlider.value); });
 
     window.speechSynthesis.onerror = (e) => { console.log('synthesis onerror:', e); alert('朗读引擎错误: ' + (e.error || '未知')); stopAllTTS(); };
 
-    let voiceInterval = setInterval(() => {
-        try {
-            const voices = speechSynthesis.getVoices();
-            if (voices.length > 0) {
-                voiceSelect.innerHTML = '<option value="">选择语音</option>';
-                voices.forEach(v => {
-                    const o = document.createElement('option');
-                    o.value = v.name;
-                    o.textContent = v.name + ' (' + v.lang + ')';
-                    voiceSelect.appendChild(o);
-                });
-                clearInterval(voiceInterval);
-            }
-        } catch (e) { console.log('语音列表:', e); }
-    }, 200);
-
-    // ============ 18. 生词本 ============
+    // ============ 19. 生词本 ============
     function addToVocabFromSelection() {
         const selection = window.getSelection();
         if (!selection || selection.toString().trim().length === 0) return;
@@ -1224,7 +1247,7 @@
     try { const saved = localStorage.getItem('vocabulary'); if (saved) vocabulary = JSON.parse(saved); } catch (e) { console.log('localStorage:', e); }
     renderVocab();
 
-    // ============ 19. 单词单独朗读 ============
+    // ============ 20. 单词单独朗读 ============
     function speakSingleWord(word) {
         stopCycleTTS();
         stopAllTTS();
@@ -1252,7 +1275,7 @@
         }
     }
 
-    // ============ 20. 生词本循环朗读 ============
+    // ============ 21. 生词本循环朗读 ============
     function toggleCycleVocab() {
         if (isCyclingVocab) { stopCycleTTS(); return; }
         if (vocabulary.length === 0) { showToast('生词本为空'); return; }
@@ -1320,7 +1343,7 @@
         }
     }
 
-    // ============ 21. 模式切换与复习卡片 ============
+    // ============ 22. 模式切换与复习卡片 ============
     function switchMode(mode) {
         currentMode = mode;
         if (mode === 'read') {
@@ -1598,22 +1621,22 @@
         showReviewCard();
     }
 
-    // ============ 22. 划词交互 ============
+    // ============ 23. 划词交互 ============
     textArea.addEventListener('mouseup', (e) => { const selection = window.getSelection(); if (selection && selection.toString().trim().length > 0) selectionMark.style.display = 'block'; });
     selectionMark.addEventListener('click', (e) => { e.stopPropagation(); addToVocabFromSelection(); selectionMark.style.display = 'none'; });
     document.addEventListener('click', (e) => { if (!e.target.closest('#textArea') && !e.target.closest('.select-btn') && !e.target.closest('#vocabBar')) selectionMark.style.display = 'none'; });
     document.addEventListener('keydown', (e) => { if (e.code === 'Escape') { stopAllTTS(); selectionMark.style.display = 'none'; } });
 
-    // ============ 23. Toast ============
+    // ============ 24. Toast ============
     function showToast(msg) { toast.textContent = msg; toast.classList.add('visible'); setTimeout(() => toast.classList.remove('visible'), 3000); }
 
-    // ============ 24. 主题 ============
+    // ============ 25. 主题 ============
     const themeToggle = document.getElementById('themeToggle');
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme) document.body.setAttribute('data-theme', savedTheme);
     themeToggle.addEventListener('click', () => { const cur = document.body.getAttribute('data-theme'); const nxt = cur === 'light' ? 'dark' : 'light'; document.body.setAttribute('data-theme', nxt); localStorage.setItem('theme', nxt); });
 
-    // ============ 25. Shift + 滚轮缩放 ============
+    // ============ 26. Shift + 滚轮缩放 ============
     let currentFontSize = 18;
     textArea.addEventListener('wheel', (e) => {
         if (e.shiftKey) {
@@ -1624,7 +1647,7 @@
         }
     }, { passive: false });
 
-    console.log('英语阅读助手已加载（含 txt/docx/xlsx/pdf 支持）');
+    console.log('英语阅读助手已加载（含 txt/docx/xlsx/pdf 支持 + 移动端语音兜底）');
 
     // ============ PWA Service Worker 注册 ============
     if ('serviceWorker' in navigator) {
