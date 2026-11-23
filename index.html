@@ -9,6 +9,7 @@
     <meta name="apple-mobile-web-app-title" content="英语阅读助手">
     <link rel="manifest" href="manifest.json">
     <title>英语阅读助手 - 阅读 + 朗读 + 划词生词 + 背单词卡片</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.5.0/mammoth.browser.min.js"></script>
     <style>
         :root {
             --bg-color: #2d2d2d;
@@ -749,7 +750,7 @@
     // ============ 4. 上传按钮 ============
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
-    fileInput.accept = '.txt';
+    fileInput.accept = '.txt,.docx';
     fileInput.style.display = 'none';
     fileInput.id = 'fileInput';
     document.body.appendChild(fileInput);
@@ -793,8 +794,16 @@
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        if (!file.name.toLowerCase().endsWith('.txt')) { showToast('请选择 .txt 文件'); e.target.value = ''; return; }
-        readFileWithEncoding(file, file.name);
+        const lower = file.name.toLowerCase();
+        if (lower.endsWith('.txt')) {
+            readFileWithEncoding(file, file.name);
+        } else if (lower.endsWith('.docx')) {
+            readDocx(file);
+        } else {
+            showToast('请选择 .txt 或 .docx 文件');
+            e.target.value = '';
+            return;
+        }
     });
 
     // ============ 5. 拖拽上传 ============
@@ -807,8 +816,10 @@
         const files = e.dataTransfer.files;
         if (files.length > 0) {
             const file = files[0];
-            if (file.name.toLowerCase().endsWith('.txt')) { readFileWithEncoding(file, file.name); }
-            else { showToast('请拖入 .txt 文件'); }
+            const lower = file.name.toLowerCase();
+            if (lower.endsWith('.txt')) { readFileWithEncoding(file, file.name); }
+            else if (lower.endsWith('.docx')) { readDocx(file); }
+            else { showToast('请拖入 .txt 或 .docx 文件'); }
         }
     });
 
@@ -861,7 +872,31 @@
         }
     }
 
-    // ============ 7. 重置并渲染（仅负责把文本显示到 #textArea，不保存）============
+    // ============ 7. 读取 Word (.docx) 文件 ============
+    function readDocx(file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const arrayBuffer = event.target.result;
+            mammoth.extractRawText({ arrayBuffer: arrayBuffer })
+                .then(result => {
+                    const text = result.value;
+                    resetStateAndRender(text, null, file.name);
+                    saveDocument(null, file.name, text);
+                })
+                .catch(err => {
+                    console.error('docx 读取失败', err);
+                    showToast('Word 文档读取失败');
+                    resetStateAndRender('');
+                });
+        };
+        reader.onerror = () => {
+            showToast('文件读取失败');
+            resetStateAndRender('');
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    // ============ 8. 重置并渲染（仅负责把文本显示到 #textArea，不保存）============
     function resetStateAndRender(text, docId, docName) {
         if (!textArea) { console.error('textArea 不存在'); return; }
         textArea.innerHTML = '';
@@ -884,14 +919,14 @@
         if (docSelect && docId) docSelect.value = docId;
     }
 
-    // ============ 8. 分句并渲染到 DOM ============
+    // ============ 9. 分句并渲染到 DOM ============
     function renderText(text) {
         if (!textArea) return;
         textArea.innerHTML = '';
         sentenceSpans = [];
         allSentences = [];
         if (!text || text.trim().length === 0) {
-            textArea.innerHTML = '请上传 .txt 文件开始阅读';
+            textArea.innerHTML = '请上传 .txt 或 .docx 文件开始阅读';
             textArea.classList.add('empty');
             return;
         }
@@ -916,7 +951,7 @@
         console.log('渲染完成，句子数:', allSentences.length);
     }
 
-    // ============ 9. 停止所有 TTS（单向，绝不互相调用）============
+    // ============ 10. 停止所有 TTS（单向，绝不互相调用）============
     function stopAllTTS() {
         if (fullTextTimer) { clearTimeout(fullTextTimer); fullTextTimer = null; }
         if (cycleTimer) { clearTimeout(cycleTimer); cycleTimer = null; }
@@ -937,12 +972,12 @@
         cycleBtn.classList.remove('cycling');
     }
 
-    // ============ 10. 全文阅读：文本深度清洗 ============
+    // ============ 11. 全文阅读：文本深度清洗 ============
     function cleanText(text) {
         return text.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
     }
 
-    // ============ 11. 全文阅读：按句末标点切分，短句合并，绝不按空格切单词 ============
+    // ============ 12. 全文阅读：按句末标点切分，短句合并，绝不按空格切单词 ============
     function splitIntoChunks(text) {
         const rawSentences = [];
         const separatorRegex = /([.!?]+|\n)/;
@@ -979,7 +1014,7 @@
         return chunks;
     }
 
-    // ============ 12. 全文阅读：带缓冲的队列播放 ============
+    // ============ 13. 全文阅读：带缓冲的队列播放 ============
     function playFullText(text) {
         stopCycleTTS();
         speechSynthesis.cancel();
@@ -1061,11 +1096,11 @@
         }
     }
 
-    // ============ 13. 播放/暂停/停止按钮 ============
+    // ============ 14. 播放/暂停/停止按钮 ============
     playBtn.addEventListener('click', () => {
         const text = textArea.textContent || textArea.innerText;
-        if (!text || text.trim() === '请上传 .txt 文件开始阅读' || text.trim() === '') {
-            showToast('请先上传 .txt 文件'); return;
+        if (!text || text.trim() === '请上传 .txt 或 .docx 文件开始阅读' || text.trim() === '') {
+            showToast('请先上传 .txt 或 .docx 文件'); return;
         }
         if (isReadingText) {
             speechSynthesis.cancel();
@@ -1089,14 +1124,14 @@
         stopAllTTS();
     });
 
-    // ============ 14. 语音/语速 ============
+    // ============ 15. 语音/语速 ============
     voiceSelect.addEventListener('change', () => { stopAllTTS(); setTimeout(() => { try { speechSynthesis.getVoices(); } catch (e) { console.log('getVoices:', e); } }, 100); });
     speedSlider.addEventListener('input', () => { speedValue.textContent = speedSlider.value + 'x'; if (isReadingText && currentUtterance) currentUtterance.rate = parseFloat(speedSlider.value); });
 
-    // ============ 15. 语音错误监听 ============
+    // ============ 16. 语音错误监听 ============
     window.speechSynthesis.onerror = (e) => { console.log('synthesis onerror:', e); alert('朗读引擎错误: ' + (e.error || '未知')); stopAllTTS(); };
 
-    // ============ 16. 语音列表加载 ============
+    // ============ 17. 语音列表加载 ============
     let voiceInterval = setInterval(() => {
         try {
             const voices = speechSynthesis.getVoices();
@@ -1113,7 +1148,7 @@
         } catch (e) { console.log('语音列表:', e); }
     }, 200);
 
-    // ============ 17. 生词本（保留，不动）============
+    // ============ 18. 生词本（保留，不动）============
     function addToVocabFromSelection() {
         const selection = window.getSelection();
         if (!selection || selection.toString().trim().length === 0) return;
@@ -1164,7 +1199,7 @@
     try { const saved = localStorage.getItem('vocabulary'); if (saved) vocabulary = JSON.parse(saved); } catch (e) { console.log('localStorage:', e); }
     renderVocab();
 
-    // ============ 18. 单词单独朗读（保留，不动）============
+    // ============ 19. 单词单独朗读（保留，不动）============
     function speakSingleWord(word) {
         stopCycleTTS();
         stopAllTTS();
@@ -1192,7 +1227,7 @@
         }
     }
 
-    // ============ 19. 生词本循环朗读（隔离状态，单向调用）============
+    // ============ 20. 生词本循环朗读（隔离状态，单向调用）============
     function toggleCycleVocab() {
         if (isCyclingVocab) { stopCycleTTS(); return; }
         if (vocabulary.length === 0) { showToast('生词本为空'); return; }
@@ -1260,7 +1295,7 @@
         }
     }
 
-    // ============ 20. 模式切换与复习卡片 ============
+    // ============ 21. 模式切换与复习卡片 ============
     function switchMode(mode) {
         currentMode = mode;
         if (mode === 'read') {
@@ -1660,22 +1695,22 @@
         showReviewCard();
     }
 
-    // ============ 21. 划词交互（保留，不动）============
+    // ============ 22. 划词交互（保留，不动）============
     textArea.addEventListener('mouseup', (e) => { const selection = window.getSelection(); if (selection && selection.toString().trim().length > 0) selectionMark.style.display = 'block'; });
     selectionMark.addEventListener('click', (e) => { e.stopPropagation(); addToVocabFromSelection(); selectionMark.style.display = 'none'; });
     document.addEventListener('click', (e) => { if (!e.target.closest('#textArea') && !e.target.closest('.select-btn') && !e.target.closest('#vocabBar')) selectionMark.style.display = 'none'; });
     document.addEventListener('keydown', (e) => { if (e.code === 'Escape') { stopAllTTS(); selectionMark.style.display = 'none'; } });
 
-    // ============ 22. Toast（保留，不动）============
+    // ============ 23. Toast（保留，不动）============
     function showToast(msg) { toast.textContent = msg; toast.classList.add('visible'); setTimeout(() => toast.classList.remove('visible'), 3000); }
 
-    // ============ 23. 主题（保留，不动）============
+    // ============ 24. 主题（保留，不动）============
     const themeToggle = document.getElementById('themeToggle');
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme) document.body.setAttribute('data-theme', savedTheme);
     themeToggle.addEventListener('click', () => { const cur = document.body.getAttribute('data-theme'); const nxt = cur === 'light' ? 'dark' : 'light'; document.body.setAttribute('data-theme', nxt); localStorage.setItem('theme', nxt); });
 
-    // ============ 24. Shift + 滚轮缩放正文字体（新增，不影响 TTS 逻辑）============
+    // ============ 25. Shift + 滚轮缩放正文字体（新增，不影响 TTS 逻辑）============
     let currentFontSize = 18;
     textArea.addEventListener('wheel', (e) => {
         if (e.shiftKey) {
@@ -1689,7 +1724,7 @@
         }
     }, { passive: false });
 
-    console.log('英语阅读助手已加载（含复习模式 + 自动查词 + 记忆分级 + PWA）');
+    console.log('英语阅读助手已加载（含复习模式 + 自动查词 + 记忆分级 + PWA + Word 支持）');
 
     // ============ PWA Service Worker 注册 ============
     if ('serviceWorker' in navigator) {
