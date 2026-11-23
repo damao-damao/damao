@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="英语阅读助手">
-    <link rel="manifest" href="/manifest.json">
+    <link rel="manifest" href="manifest.json">
     <title>英语阅读助手 - 阅读 + 朗读 + 划词生词 + 背单词卡片</title>
     <style>
         :root {
@@ -216,7 +216,7 @@
             width: 20px; height: 20px; font-size: 12px; line-height: 20px;
             text-align: center; cursor: pointer; margin-left: 6px; flex-shrink: 0;
         }
-        .vocab-speak:hover { background: #8a8a8a; }
+        .vocab-speak:hover { background: #8a6a6a; }
 
         .cycle-btn {
             background: #4a4a4a; color: #e0e0e0; border: 1px solid #666;
@@ -353,7 +353,7 @@
             font-size: 12px;
             cursor: pointer;
         }
-        .card-actions-top .add-meaning-btn:hover { background: #8a8a8a; }
+        .card-actions-top .add-meaning-btn:hover { background: #8a6a6a; }
 
         /* 三个状态按钮：靠拢，放在卡片内部最下面 */
         .card-actions-bottom {
@@ -1694,7 +1694,7 @@
     // ============ PWA Service Worker 注册 ============
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/sw.js')
+            navigator.serviceWorker.register('sw.js')
                 .then(reg => console.log('SW 注册成功:', reg.scope))
                 .catch(err => console.log('SW 注册失败:', err));
         });
