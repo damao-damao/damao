@@ -517,6 +517,7 @@
         <button class="control-btn" id="pauseBtn" style="display: none;">暂停</button>
         <button class="control-btn" id="stopBtn" style="display: none;">停止</button>
     </div>
+    <button class="control-btn" id="addWordBtn" title="将选中文字加入生词本">➕加单词</button>
     <select class="voice-select" id="voiceSelect"><option value="">使用系统默认语音</option></select>
     <div class="speed-control">
         <input type="range" id="speedSlider" min="0.5" max="1.5" step="0.1" value="1">
@@ -1166,6 +1167,19 @@
             currentChunkIndex = 0;
         }
         playFullText(text);
+    });
+
+    // 将选中文字加入生词本（移动端友好，无需划词弹出按钮）
+    addWordBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const selection = window.getSelection();
+        const word = selection.toString().trim();
+        if (!word || word.length < 2) {
+            showToast('请先选中至少 2 个字符');
+            return;
+        }
+        addToVocabFromSelection();
+        showToast('已加入生词本');
     });
 
     pauseBtn.addEventListener('click', () => {
