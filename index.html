@@ -1083,11 +1083,7 @@
         stopCycleTTS();
         speechSynthesis.cancel();
         loadVoices();
-        const voices = speechSynthesis.getVoices();
-        if (voices.length === 0) {
-            showToast('当前浏览器未检测到可用语音，请稍后再试');
-            return;
-        }
+        // 兜底：即使检测不到语音列表，也直接尝试使用浏览器默认语音播放
         const cleaned = cleanText(text);
         if (!cleaned) return;
         fullTextChunks = splitIntoChunks(cleaned);
