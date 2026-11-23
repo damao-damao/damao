@@ -1,0 +1,1705 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#2d2d2d">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="英语阅读助手">
+    <link rel="manifest" href="/manifest.json">
+    <title>英语阅读助手 - 阅读 + 朗读 + 划词生词 + 背单词卡片</title>
+    <style>
+        :root {
+            --bg-color: #2d2d2d;
+            --text-color: #e0e0e0;
+            --accent-color: #ffd700;
+            --highlight-color: #ffff99;
+            --button-bg: #4a4a4a;
+            --button-hover: #5a5a5a;
+            --toast-bg: #4a4a4a;
+            --vocab-bg: #333333;
+            --border-color: #555;
+        }
+
+        [data-theme="light"] {
+            --bg-color: #f5f5f0;
+            --text-color: #2c2c2c;
+            --accent-color: #2196f3;
+            --highlight-color: #ffff00;
+            --button-bg: #e0e0e0;
+            --button-hover: #d0d0d0;
+            --toast-bg: #f5f5f0;
+            --vocab-bg: #ffffff;
+            --border-color: #ddd;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+        }
+
+        /* ============ 控制栏（吸顶悬浮）============ */
+        .control-bar {
+            padding: 8px 16px;
+            background-color: var(--button-bg);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            width: 100%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
+
+        .control-bar h1 { color: var(--text-color); font-size: 16px; margin: 0; white-space: nowrap; }
+
+        .upload-btn {
+            padding: 6px 12px;
+            background: var(--button-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .upload-btn:hover { background: var(--button-hover); border-color: var(--accent-color); }
+        .upload-btn:focus { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+
+        .encoding-select {
+            padding: 6px 10px;
+            background: var(--button-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            min-width: 100px;
+        }
+
+        .control-btn {
+            padding: 6px 12px;
+            background: var(--button-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            margin-left: 4px;
+        }
+        .control-btn:hover { background: var(--button-hover); }
+        .control-btn:focus { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+
+        .voice-select {
+            padding: 6px 10px;
+            background: var(--button-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            min-width: 120px;
+        }
+
+        .speed-control { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+        .speed-control input[type="range"] { width: 160px; cursor: pointer; }
+        .speed-value { min-width: 36px; text-align: center; font-size: 12px; color: #666; }
+
+        /* 模式切换按钮 */
+        .mode-btn {
+            padding: 6px 14px;
+            background: var(--button-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .mode-btn:hover { background: var(--button-hover); border-color: var(--accent-color); }
+        .mode-btn.active {
+            background: var(--accent-color);
+            color: #000;
+            border-color: var(--accent-color);
+        }
+        .mode-btn.active#modeReview { background: #ff4444; color: #fff; border-color: #ff4444; }
+
+        #textArea {
+            width: 100%;
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 16px;
+            padding-bottom: 280px;
+            background: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.8;
+            font-size: 18px;
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+            text-align: left;
+            user-select: text;
+        }
+
+        .text-area .sentence {
+            display: inline-block;
+            margin-bottom: 8px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: background 0.15s, color 0.15s;
+        }
+        .text-area .sentence.highlighted {
+            background: var(--highlight-color);
+            color: #000;
+        }
+
+        .select-btn {
+            position: fixed;
+            right: 20px;
+            top: 20px;
+            background: var(--accent-color);
+            color: #000;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 1001;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            line-height: 24px;
+            text-align: center;
+            display: none;
+        }
+
+        #vocabBar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            max-height: 250px;
+            overflow: auto;
+            background: #333333;
+            border-top: 2px solid #555;
+            padding: 15px;
+            z-index: 9999;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        .vocab-title { color: #e0e0e0; font-weight: 600; margin-right: 12px; }
+        .vocab-item {
+            background: #4a4a4a;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-right: 4px;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .vocab-item .word { font-weight: 500; color: var(--text-color); flex: 1; min-width: 60px; }
+        .vocab-item .remove { color: #ff5252; margin-left: 4px; cursor: pointer; font-size: 14px; line-height: 1; }
+        .vocab-speak {
+            background: #6a6a6a; color: #fff; border: none; border-radius: 4px;
+            width: 20px; height: 20px; font-size: 12px; line-height: 20px;
+            text-align: center; cursor: pointer; margin-left: 6px; flex-shrink: 0;
+        }
+        .vocab-speak:hover { background: #8a8a8a; }
+
+        .cycle-btn {
+            background: #4a4a4a; color: #e0e0e0; border: 1px solid #666;
+            border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px; margin-left: 10px;
+        }
+        .cycle-btn:hover { background: #5a5a5a; }
+        .cycle-btn.cycling { background: var(--accent-color); color: #000; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+
+        .toast {
+            position: fixed; bottom: 260px; left: 50%; transform: translateX(-50%);
+            background: var(--toast-bg); padding: 10px 20px; border-radius: 4px;
+            color: var(--text-color); font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 10000; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+        }
+        .toast.visible { opacity: 1; }
+
+        /* ============ 复习卡片区域 ============ */
+        #reviewPanel {
+            display: none;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #reviewPanel:not(.hidden) {
+            display: block !important;
+        }
+
+        /* 复习模式顶部统计 */
+        .review-stats {
+            margin-bottom: 16px;
+            font-size: 15px;
+            color: var(--accent-color);
+            font-weight: 600;
+            background: rgba(255,255,255,0.05);
+            padding: 6px 16px;
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        /* 单面卡片：无 3D 翻转，无 perspective、rotateY、backface-visibility */
+        .card-wrapper {
+            width: 420px;
+            min-height: 360px;
+            position: relative;
+        }
+
+        .card {
+            width: 100%;
+            min-height: 360px;
+            background: #333333;
+            color: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            text-align: center;
+            padding: 24px 20px;
+            box-sizing: border-box;
+        }
+
+        /* 卡片内容：flex 列布局，直接包裹内容，不再内置滚动条 */
+        .card-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: center;
+            text-align: center;
+            width: 100%;
+        }
+
+        /* 释义：安静的辅助 */
+        .card .card-def {
+            font-size: 16px;
+            color: #999999;
+            line-height: 1.6;
+            max-width: 80%;
+            word-break: break-word;
+        }
+
+        /* 英文释义：上方，小字、灰色 */
+        .card .card-def-en {
+            font-size: 14px;
+            color: #999999;
+            line-height: 1.6;
+            max-width: 80%;
+            word-break: break-word;
+            margin-bottom: 6px;
+        }
+
+        /* 中文翻译：下方，稍大、浅蓝色高亮，一眼能看到 */
+        .card .card-def-zh {
+            font-size: 18px;
+            color: #4db8ff;
+            line-height: 1.6;
+            max-width: 80%;
+            word-break: break-word;
+            font-weight: 600;
+        }
+
+        .card .card-loading {
+            font-size: 14px;
+            color: #aaaaaa;
+            font-style: italic;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            margin-top: 30px;
+        }
+
+        .loading-spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #e0e0e0;
+            border-top: 3px solid var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 【添加释义】按钮：放在释义正下方 */
+        .card-actions-top .add-meaning-btn {
+            background: #6a6a6a;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 14px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .card-actions-top .add-meaning-btn:hover { background: #8a8a8a; }
+
+        /* 三个状态按钮：靠拢，放在卡片内部最下面 */
+        .card-actions-bottom {
+            margin-top: auto;
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .card-actions-bottom .status-btn {
+            padding: 6px 14px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+        }
+        .card-actions-bottom .status-btn.unknown { background: #ff4444; color: #fff; }
+        .card-actions-bottom .status-btn.fuzzy { background: #ffaa00; color: #000; }
+        .card-actions-bottom .status-btn.easy { background: #44aa44; color: #fff; }
+        .card-actions-bottom .status-btn:hover { opacity: 0.85; }
+        .card-actions-bottom .status-btn.selected { filter: brightness(1.2); }
+
+        /* 卡片外部仅保留【上一个】【下一个】翻页按钮 */
+        .card-nav {
+            margin-top: 24px;
+            margin-bottom: 60px;
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .card-btn {
+            padding: 8px 20px;
+            background: var(--button-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .card-btn:hover { background: var(--button-hover); }
+
+        /* 正文区域在复习模式下隐藏时不影响布局 */
+        #textArea.hidden { display: none !important; }
+        #reviewPanel.hidden { display: none !important; }
+
+        /* ============ PWA 响应式与触屏适配 ============ */
+        body {
+            overflow-x: hidden;
+            touch-action: manipulation;
+        }
+
+        /* 禁止长按选中、拖动溢出，柔和点击反馈 */
+        * {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        .sentence { -webkit-user-select: text; user-select: text; }
+
+        /* 控制栏触屏友好：按钮加大、扩大点击热区 */
+        .control-bar { gap: 10px; padding: 12px 16px; }
+        .upload-btn, .control-btn, .mode-btn, #themeToggle {
+            min-height: 44px;
+            min-width: 44px;
+            font-size: 14px;
+            padding: 10px 14px;
+        }
+        .speed-control input[type="range"] { width: 200px; height: 44px; }
+        .speed-value { font-size: 14px; }
+
+        /* 下拉选择加大 */
+        .encoding-select, .voice-select {
+            min-height: 44px;
+            font-size: 14px;
+            padding: 8px 12px;
+        }
+
+        /* 复习卡片：响应式宽度，适配手机 */
+        .card-wrapper { width: 100%; max-width: 520px; min-height: auto; }
+        .card {
+            min-height: 320px;
+            padding: 20px 16px;
+            border-radius: 20px;
+        }
+        .card-content { gap: 14px; }
+        .card-word { font-size: 48px !important; }
+        .card-def-syn { font-size: 15px; }
+        #zhMeaning { font-size: 20px !important; }
+
+        /* 评分按钮加大、扩大点击热区（触屏友好） */
+        .card-actions-bottom .status-btn {
+            min-height: 48px;
+            min-width: 90px;
+            font-size: 15px;
+            padding: 10px 16px;
+            margin: 4px;
+        }
+        .card-actions-top .add-meaning-btn {
+            min-height: 44px;
+            font-size: 14px;
+            padding: 8px 16px;
+        }
+
+        /* 上一个/下一个按钮加大 */
+        .card-nav { gap: 16px; margin-bottom: 120px; }
+        .card-btn {
+            min-height: 48px;
+            min-width: 100px;
+            font-size: 15px;
+            padding: 10px 20px;
+        }
+
+        /* 生词本底部条触屏友好 */
+        #vocabBar { padding: 12px; gap: 10px; }
+        .vocab-speak { width: 32px; height: 32px; font-size: 16px; line-height: 32px; }
+
+        /* 正文自动换行，适配屏幕 */
+        #textArea {
+            width: 100%;
+            max-width: 100%;
+            margin: 16px auto;
+            padding: 16px;
+            font-size: 16px;
+            line-height: 1.8;
+        }
+
+        /* 竖屏/横屏兼容 */
+        @media (max-width: 480px) {
+            .card-word { font-size: 40px !important; }
+            #zhMeaning { font-size: 18px !important; }
+            .card-def-syn { font-size: 14px; }
+            #textArea { font-size: 15px; padding: 12px; }
+        }
+
+        @media (orientation: landscape) and (max-height: 500px) {
+            .card-nav { margin-bottom: 80px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="control-bar">
+    <h1>英语阅读助手</h1>
+    <button class="upload-btn" id="uploadBtn">上传 .txt</button>
+    <select class="encoding-select" id="docSelect"><option value="">📁 我的文档</option></select>
+    <button class="control-btn" id="clearDocBtn">删除当前文档</button>
+    <select class="encoding-select" id="encodingSelect">
+        <option value="gbk">GBK</option>
+        <option value="utf-8">UTF-8</option>
+        <option value="gb18030">GB18030</option>
+    </select>
+    <div style="display: flex; align-items: center; gap: 6px;">
+        <button class="control-btn" id="playBtn">播放</button>
+        <button class="control-btn" id="pauseBtn" style="display: none;">暂停</button>
+        <button class="control-btn" id="stopBtn" style="display: none;">停止</button>
+    </div>
+    <select class="voice-select" id="voiceSelect"><option value="">选择语音</option></select>
+    <div class="speed-control">
+        <input type="range" id="speedSlider" min="0.5" max="1.5" step="0.1" value="1">
+        <span class="speed-value" id="speedValue">1.0x</span>
+    </div>
+    <button class="upload-btn" id="themeToggle" title="切换主题">🌙</button>
+
+    <!-- 模式切换按钮 -->
+    <button class="mode-btn active" id="modeRead">📖 阅读模式</button>
+    <button class="mode-btn" id="modeReview">🎴 复习模式</button>
+</div>
+
+<div id="textArea" contenteditable="false" tabindex="0"></div>
+
+<!-- 复习卡片区域（默认隐藏） -->
+<div id="reviewPanel">
+    <div class="review-stats" id="reviewStats">今日已复习：0 个单词</div>
+    <div class="card-wrapper">
+        <div class="card" id="reviewCard">
+            <div class="card-content">
+                <div class="word" id="cardWord"></div>
+                <div class="pronounce" id="pronounceRow"></div>
+                <div class="meaning" id="cardDef"></div>
+                <div id="cardLoading"></div>
+                <div class="card-actions-top">
+                    <button class="add-meaning-btn" id="addDefBtn">+ 添加释义</button>
+                </div>
+                <div class="card-actions-bottom">
+                    <button class="status-btn unknown" id="lvl0Btn">不认识</button>
+                    <button class="status-btn fuzzy" id="lvl1Btn">模糊</button>
+                    <button class="status-btn easy" id="lvl2Btn">太简单</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card-nav">
+        <button class="card-btn" id="cardPrev">上一个</button>
+        <button class="card-btn" id="cardNext">下一个</button>
+    </div>
+    <div class="nav-spacer" style="height: 100px;"></div>
+    <div id="cardEmpty" style="display:none; color:#888; margin-top:20px;">暂无生词，请先阅读划词</div>
+</div>
+
+<div id="vocabBar">
+    <span class="vocab-title">生词本</span>
+    <button class="cycle-btn" id="cycleBtn">循环朗读生词本</button>
+</div>
+
+<div class="toast" id="toast">已加入生词本</div>
+<button class="select-btn" id="selectBtn">+</button>
+
+<script>
+    // ============ 1. 状态变量 ============
+    let currentUtterance = null;
+    let isReadingText = false;          // 全文阅读标志位
+    let isCyclingVocab = false;         // 生词本循环标志位
+    let isPaused = false;
+    let currentHighlightedSpan = null;
+    let sentenceSpans = [];
+    let allSentences = [];
+    let vocabulary = JSON.parse(localStorage.getItem('vocabulary')) || [];
+    let selectedEncoding = 'gbk';
+    let dragOver = false;
+    let selectionMark = document.getElementById('selectBtn');
+
+    // 全文阅读队列状态
+    let fullTextChunks = [];
+    let currentChunkIndex = 0;
+    let fullTextTimer = null;
+
+    // 生词本循环状态
+    let cycleIndex = 0;
+    let cycleTimer = null;
+
+    // 复习模式状态
+    let currentMode = 'read';           // 'read' | 'review'
+    let reviewWords = [];               // 生词本副本
+    let currentReviewWord = null;       // 当前正在复习的单词对象
+    let dailyReviewCount = 0;           // 今日已复习计数
+    let wordLevels = {};                // { word: level } 0=不认识 1=模糊 2=太简单
+    let wordWeights = {};               // { word: weight } 1=太简单 3=模糊 5=不认识
+    let wordDefinitions = {};           // { word: {phonetic, pos, def} }
+    let reviewPool = [];                // 当前轮次待复习词
+    let retiredThisRound = new Set();   // 本轮已退出（点太简单）的词
+
+    // 多文档库状态
+    let documents = [];                 // [{ id, name, content }]
+    let currentDocId = null;            // 当前正在查看的文档 id
+    let docIdCounter = 1;               // 文档 id 计数器
+
+    // ============ 2. DOM 缓存 ============
+    const textArea = document.getElementById('textArea');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const playBtn = document.getElementById('playBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const voiceSelect = document.getElementById('voiceSelect');
+    const speedSlider = document.getElementById('speedSlider');
+    const speedValue = document.getElementById('speedValue');
+    const encodingSelect = document.getElementById('encodingSelect');
+    const toast = document.getElementById('toast');
+    const clearDocBtn = document.getElementById('clearDocBtn');
+    const docSelect = document.getElementById('docSelect');
+    const vocabBar = document.getElementById('vocabBar');
+    const cycleBtn = document.getElementById('cycleBtn');
+
+    // 模式切换相关 DOM
+    const modeReadBtn = document.getElementById('modeRead');
+    const modeReviewBtn = document.getElementById('modeReview');
+    const reviewPanel = document.getElementById('reviewPanel');
+    const reviewCard = document.getElementById('reviewCard');
+    const cardWord = document.getElementById('cardWord');
+    const pronounceRow = document.getElementById('pronounceRow');
+    const cardDef = document.getElementById('cardDef');
+    const cardLoading = document.getElementById('cardLoading');
+    const cardEmpty = document.getElementById('cardEmpty');
+    const cardPrev = document.getElementById('cardPrev');
+    const cardNext = document.getElementById('cardNext');
+    const reviewStats = document.getElementById('reviewStats');
+    const addDefBtn = document.getElementById('addDefBtn');
+    const lvl0Btn = document.getElementById('lvl0Btn');
+    const lvl1Btn = document.getElementById('lvl1Btn');
+    const lvl2Btn = document.getElementById('lvl2Btn');
+
+    // ============ 3. 初始化持久化数据 ============
+    function loadPersistentData() {
+        try {
+            const savedLevels = localStorage.getItem('wordLevels');
+            if (savedLevels) wordLevels = JSON.parse(savedLevels);
+            const savedWeights = localStorage.getItem('wordWeights');
+            if (savedWeights) wordWeights = JSON.parse(savedWeights);
+            const savedDefs = localStorage.getItem('wordDefinitions');
+            if (savedDefs) wordDefinitions = JSON.parse(savedDefs);
+            const savedCount = localStorage.getItem('dailyReviewCount');
+            if (savedCount) dailyReviewCount = parseInt(savedCount);
+            updateReviewStats();
+
+            // 加载多文档库
+            const savedDocs = localStorage.getItem('documents');
+            if (savedDocs) {
+                documents = JSON.parse(savedDocs);
+                // 找出最大 id，避免重复
+                if (documents.length > 0) {
+                    docIdCounter = Math.max(...documents.map(d => d.id)) + 1;
+                }
+                renderDocSelect();
+                // 自动加载第一个文档（如果没有当前文档）
+                if (documents.length > 0 && !currentDocId) {
+                    currentDocId = documents[0].id;
+                    docSelect.value = currentDocId;
+                    resetStateAndRender(documents[0].content);
+                }
+            }
+        } catch (e) { console.log('加载持久化数据失败:', e); }
+    }
+
+    function savePersistentData() {
+        try {
+            localStorage.setItem('wordLevels', JSON.stringify(wordLevels));
+            localStorage.setItem('wordWeights', JSON.stringify(wordWeights));
+            localStorage.setItem('wordDefinitions', JSON.stringify(wordDefinitions));
+            localStorage.setItem('dailyReviewCount', dailyReviewCount);
+            // 保存文档库
+            localStorage.setItem('documents', JSON.stringify(documents));
+        } catch (e) { console.log('保存持久化数据失败:', e); }
+    }
+
+    function updateReviewStats() {
+        if (reviewStats) reviewStats.textContent = `今日已复习：${dailyReviewCount} 个单词`;
+    }
+
+    // 渲染文档库下拉菜单
+    function renderDocSelect() {
+        if (!docSelect) return;
+        docSelect.innerHTML = '<option value="">📁 我的文档</option>';
+        documents.forEach(doc => {
+            const o = document.createElement('option');
+            o.value = doc.id;
+            o.textContent = doc.name;
+            docSelect.appendChild(o);
+        });
+        if (currentDocId) docSelect.value = currentDocId;
+    }
+
+    // 保存文档到多文档库（防覆盖，支持去重）
+    function saveDocument(docId, docName, content) {
+        if (!content || content.trim().length === 0) return;
+
+        // 从 localStorage 读取已有数组（确保拿到最新）
+        let docs = [];
+        try {
+            const raw = localStorage.getItem('documents');
+            if (raw) docs = JSON.parse(raw);
+        } catch (e) {
+            console.log('读取文档库失败:', e);
+            docs = [];
+        }
+
+        // 去重：同名文件覆盖旧的
+        const existingIdx = docs.findIndex(d => d.name === docName);
+        if (existingIdx >= 0) {
+            docs[existingIdx].content = content;
+            docs[existingIdx].id = docId || docs[existingIdx].id;
+            currentDocId = docs[existingIdx].id;
+        } else {
+            const newId = docId || Date.now();
+            docs.push({ id: newId, name: docName, content: content });
+            currentDocId = newId;
+        }
+
+        // 更新内存数组
+        documents = docs;
+
+        // 存回 localStorage
+        try {
+            localStorage.setItem('documents', JSON.stringify(docs));
+            console.log('当前文档库数量:', docs.length);
+        } catch (e) {
+            if (e.name === 'QuotaExceededError') {
+                showToast('文档库已满');
+            } else {
+                console.log('保存文档库失败:', e);
+            }
+        }
+
+        // 刷新下拉菜单
+        renderDocSelect();
+    }
+
+    // 初始化持久化数据
+    loadPersistentData();
+
+    // ============ 4. 上传按钮 ============
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.txt';
+    fileInput.style.display = 'none';
+    fileInput.id = 'fileInput';
+    document.body.appendChild(fileInput);
+
+    uploadBtn.addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
+
+    // 清空文档按钮（现改为删除当前文档）
+    clearDocBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (currentDocId === null) { showToast('没有可删除的文档'); return; }
+        // 从数组中删除
+        documents = documents.filter(d => d.id !== currentDocId);
+        try {
+            localStorage.setItem('documents', JSON.stringify(documents));
+        } catch (err) {
+            console.log('保存文档库失败:', err);
+        }
+        currentDocId = null;
+        renderDocSelect();
+        textArea.innerHTML = '';
+        textArea.classList.add('empty');
+        sentenceSpans = [];
+        allSentences = [];
+        stopAllTTS();
+        showToast('文档已删除');
+    });
+
+    // 文档库下拉菜单切换
+    docSelect.addEventListener('change', (e) => {
+        e.stopPropagation();
+        const val = e.target.value;
+        if (!val) return;
+        const docId = parseInt(val);
+        const doc = documents.find(d => d.id === docId);
+        if (doc) {
+            currentDocId = doc.id;
+            resetStateAndRender(doc.content, doc.id, doc.name);
+        }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (!file.name.toLowerCase().endsWith('.txt')) { showToast('请选择 .txt 文件'); e.target.value = ''; return; }
+        readFileWithEncoding(file, file.name);
+    });
+
+    // ============ 5. 拖拽上传 ============
+    const textAreaDiv = textArea;
+    document.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); if (e.target === textAreaDiv) { textAreaDiv.style.borderColor = '#ffd700'; dragOver = true; } });
+    document.addEventListener('dragleave', (e) => { e.preventDefault(); e.stopPropagation(); if (e.target === textAreaDiv) { textAreaDiv.style.borderColor = ''; dragOver = false; } });
+    document.addEventListener('drop', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (dragOver) { textAreaDiv.style.borderColor = ''; dragOver = false; }
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            const file = files[0];
+            if (file.name.toLowerCase().endsWith('.txt')) { readFileWithEncoding(file, file.name); }
+            else { showToast('请拖入 .txt 文件'); }
+        }
+    });
+
+    // ============ 6. 文件读取（稳健版）============
+    function normalizeEncoding(enc) { return enc === 'gbk' ? 'gb18030' : enc; }
+
+    function readFileWithEncoding(file, fileName) {
+        const reader = new FileReader();
+
+        reader.onload = (event) => {
+            let text = '';
+            try {
+                const result = event.target.result;
+                if (result instanceof ArrayBuffer) {
+                    const encs = [normalizeEncoding(selectedEncoding), 'utf-8', 'gb18030'];
+                    for (const enc of encs) {
+                        try {
+                            text = new TextDecoder(enc).decode(result);
+                            if (!text.includes('\uFFFD') || enc === 'gb18030') break;
+                        } catch (e) { console.log(`编码 ${enc} 失败`, e); }
+                    }
+                } else {
+                    text = String(result || '');
+                }
+            } catch (err) {
+                console.log('decode error:', err);
+                text = String(event.target.result || '');
+            }
+            console.log('文件读取完成，长度:', text.length);
+            resetStateAndRender(text, null, fileName);
+            // 保存到多文档库（防覆盖，支持去重）
+            saveDocument(null, fileName, text);
+        };
+
+        reader.onerror = () => {
+            console.error('FileReader error');
+            showToast('文件读取失败');
+            resetStateAndRender('');
+        };
+
+        try { reader.readAsArrayBuffer(file); }
+        catch (e) {
+            console.log('readAsArrayBuffer 失败，回退:', e);
+            try { reader.readAsText(file, selectedEncoding); }
+            catch (e2) {
+                console.log('readAsText 也失败:', e2);
+                showToast('无法读取文件');
+                resetStateAndRender('');
+            }
+        }
+    }
+
+    // ============ 7. 重置并渲染（仅负责把文本显示到 #textArea，不保存）============
+    function resetStateAndRender(text, docId, docName) {
+        if (!textArea) { console.error('textArea 不存在'); return; }
+        textArea.innerHTML = '';
+        sentenceSpans = [];
+        allSentences = [];
+        stopAllTTS();
+        isReadingText = false; isPaused = false;
+        playBtn.style.display = 'inline-block';
+        pauseBtn.style.display = 'none';
+        stopBtn.style.display = 'none';
+        if (playBtn.textContent !== '播放') playBtn.textContent = '播放';
+        if (currentHighlightedSpan) {
+            currentHighlightedSpan.classList.remove('highlighted');
+            currentHighlightedSpan = null;
+        }
+        renderText(text);
+
+        // 更新当前文档 ID 和下拉菜单选中状态（只在传入 docId 时更新）
+        if (docId) currentDocId = docId;
+        if (docSelect && docId) docSelect.value = docId;
+    }
+
+    // ============ 8. 分句并渲染到 DOM ============
+    function renderText(text) {
+        if (!textArea) return;
+        textArea.innerHTML = '';
+        sentenceSpans = [];
+        allSentences = [];
+        if (!text || text.trim().length === 0) {
+            textArea.innerHTML = '请上传 .txt 文件开始阅读';
+            textArea.classList.add('empty');
+            return;
+        }
+        textArea.classList.remove('empty');
+        const sentenceRegex = /[.!?]+(?:\s+|$)/;
+        const parts = text.split(sentenceRegex);
+        allSentences = parts.filter(s => s && s.trim().length > 0);
+        if (allSentences.length === 0) allSentences = [text.trim()];
+        let offset = 0;
+        allSentences.forEach((sentence, index) => {
+            const span = document.createElement('span');
+            span.className = 'sentence';
+            span.dataset.index = index;
+            span.dataset.start = offset;
+            span.dataset.end = offset + sentence.length;
+            span.textContent = sentence;
+            offset += sentence.length + 1;
+            textArea.appendChild(span);
+            sentenceSpans.push(span);
+        });
+        textArea.style.minHeight = '400px';
+        console.log('渲染完成，句子数:', allSentences.length);
+    }
+
+    // ============ 9. 停止所有 TTS（单向，绝不互相调用）============
+    function stopAllTTS() {
+        if (fullTextTimer) { clearTimeout(fullTextTimer); fullTextTimer = null; }
+        if (cycleTimer) { clearTimeout(cycleTimer); cycleTimer = null; }
+        try { speechSynthesis.cancel(); } catch (e) { console.log('cancel:', e); }
+        currentUtterance = null;
+        isReadingText = false;
+        isCyclingVocab = false;
+        isPaused = false;
+        playBtn.style.display = 'inline-block';
+        pauseBtn.style.display = 'none';
+        stopBtn.style.display = 'none';
+        if (playBtn.textContent !== '播放') playBtn.textContent = '播放';
+        if (currentHighlightedSpan) {
+            currentHighlightedSpan.classList.remove('highlighted');
+            currentHighlightedSpan = null;
+        }
+        cycleBtn.textContent = '循环朗读生词本';
+        cycleBtn.classList.remove('cycling');
+    }
+
+    // ============ 10. 全文阅读：文本深度清洗 ============
+    function cleanText(text) {
+        return text.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    }
+
+    // ============ 11. 全文阅读：按句末标点切分，短句合并，绝不按空格切单词 ============
+    function splitIntoChunks(text) {
+        const rawSentences = [];
+        const separatorRegex = /([.!?]+|\n)/;
+        const parts = text.split(separatorRegex);
+        let buf = '';
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            if (separatorRegex.test(part)) {
+                buf = (buf || '') + part;
+                if (buf.trim().length > 0) {
+                    rawSentences.push(buf.trim());
+                    buf = '';
+                }
+            } else {
+                buf = (buf || '') + part;
+            }
+        }
+        if (buf && buf.trim().length > 0) {
+            rawSentences.push(buf.trim());
+        }
+
+        const chunks = [];
+        let i = 0;
+        while (i < rawSentences.length) {
+            let chunk = rawSentences[i];
+            i++;
+            while (chunk.length < 50 && i < rawSentences.length) {
+                chunk = chunk + ' ' + rawSentences[i];
+                i++;
+            }
+            chunks.push(chunk);
+        }
+
+        return chunks;
+    }
+
+    // ============ 12. 全文阅读：带缓冲的队列播放 ============
+    function playFullText(text) {
+        stopCycleTTS();
+        speechSynthesis.cancel();
+
+        const cleaned = cleanText(text);
+        if (!cleaned) return;
+
+        fullTextChunks = splitIntoChunks(cleaned);
+        currentChunkIndex = 0;
+        isReadingText = true;
+
+        isPaused = false;
+        playBtn.style.display = 'none';
+        pauseBtn.style.display = 'inline-block';
+        stopBtn.style.display = 'inline-block';
+
+        speakNextFullTextChunk();
+    }
+
+    function speakNextFullTextChunk() {
+        if (!isReadingText) return;
+        if (currentChunkIndex >= fullTextChunks.length) {
+            isReadingText = false;
+            fullTextChunks = [];
+            currentChunkIndex = 0;
+            playBtn.style.display = 'inline-block';
+            pauseBtn.style.display = 'none';
+            stopBtn.style.display = 'none';
+            if (currentHighlightedSpan) {
+                currentHighlightedSpan.classList.remove('highlighted');
+                currentHighlightedSpan = null;
+            }
+            showToast('全文朗读完成');
+            return;
+        }
+
+        const chunk = fullTextChunks[currentChunkIndex];
+        currentChunkIndex++;
+
+        try {
+            const utterance = new SpeechSynthesisUtterance(chunk);
+            utterance.rate = parseFloat(speedSlider.value) || 1.0;
+            utterance.volume = 1.0;
+            const voiceName = voiceSelect.value;
+            if (voiceName && voiceName.length > 0) {
+                const voices = speechSynthesis.getVoices();
+                const voice = voices.find(v => v.name === voiceName);
+                if (voice) utterance.voice = voice;
+            }
+
+            utterance.onend = () => {
+                currentUtterance = null;
+                if (isReadingText && !isPaused) {
+                    fullTextTimer = setTimeout(() => {
+                        speakNextFullTextChunk();
+                    }, 120);
+                }
+            };
+
+            utterance.onerror = (e) => {
+                currentUtterance = null;
+                if (e.error === 'interrupted' || e.error === 'canceled') return;
+                console.error('Full text utterance error:', e);
+                if (isReadingText) {
+                    isReadingText = false;
+                    fullTextChunks = [];
+                    currentChunkIndex = 0;
+                    playBtn.style.display = 'inline-block';
+                    pauseBtn.style.display = 'none';
+                    stopBtn.style.display = 'none';
+                    alert('全文朗读失败: ' + (e.error || '未知错误'));
+                }
+            };
+
+            speechSynthesis.speak(utterance);
+            currentUtterance = utterance;
+        } catch (e) {
+            console.error('speakNextFullTextChunk error:', e);
+        }
+    }
+
+    // ============ 13. 播放/暂停/停止按钮 ============
+    playBtn.addEventListener('click', () => {
+        const text = textArea.textContent || textArea.innerText;
+        if (!text || text.trim() === '请上传 .txt 文件开始阅读' || text.trim() === '') {
+            showToast('请先上传 .txt 文件'); return;
+        }
+        if (isReadingText) {
+            speechSynthesis.cancel();
+            isReadingText = false;
+            fullTextChunks = [];
+            currentChunkIndex = 0;
+        }
+        playFullText(text);
+    });
+
+    pauseBtn.addEventListener('click', () => {
+        if (isReadingText && !isPaused) { try { speechSynthesis.pause(); } catch (e) { console.log('pause:', e); } isPaused = true; pauseBtn.textContent = '继续'; playBtn.style.display = 'inline-block'; pauseBtn.style.display = 'none'; }
+        else if (isReadingText && isPaused) { try { speechSynthesis.resume(); } catch (e) { console.log('resume:', e); } isPaused = false; pauseBtn.textContent = '暂停'; playBtn.style.display = 'none'; pauseBtn.style.display = 'inline-block'; }
+    });
+
+    stopBtn.addEventListener('click', () => {
+        speechSynthesis.cancel();
+        isReadingText = false;
+        fullTextChunks = [];
+        currentChunkIndex = 0;
+        stopAllTTS();
+    });
+
+    // ============ 14. 语音/语速 ============
+    voiceSelect.addEventListener('change', () => { stopAllTTS(); setTimeout(() => { try { speechSynthesis.getVoices(); } catch (e) { console.log('getVoices:', e); } }, 100); });
+    speedSlider.addEventListener('input', () => { speedValue.textContent = speedSlider.value + 'x'; if (isReadingText && currentUtterance) currentUtterance.rate = parseFloat(speedSlider.value); });
+
+    // ============ 15. 语音错误监听 ============
+    window.speechSynthesis.onerror = (e) => { console.log('synthesis onerror:', e); alert('朗读引擎错误: ' + (e.error || '未知')); stopAllTTS(); };
+
+    // ============ 16. 语音列表加载 ============
+    let voiceInterval = setInterval(() => {
+        try {
+            const voices = speechSynthesis.getVoices();
+            if (voices.length > 0) {
+                voiceSelect.innerHTML = '<option value="">选择语音</option>';
+                voices.forEach(v => {
+                    const o = document.createElement('option');
+                    o.value = v.name;
+                    o.textContent = v.name + ' (' + v.lang + ')';
+                    voiceSelect.appendChild(o);
+                });
+                clearInterval(voiceInterval);
+            }
+        } catch (e) { console.log('语音列表:', e); }
+    }, 200);
+
+    // ============ 17. 生词本（保留，不动）============
+    function addToVocabFromSelection() {
+        const selection = window.getSelection();
+        if (!selection || selection.toString().trim().length === 0) return;
+        const word = selection.toString().trim();
+        if (word.length < 2) { showToast('请选中至少 2 个字符'); return; }
+        let context = '';
+        const allSpans = textArea.querySelectorAll('.sentence');
+        if (allSpans.length > 0) {
+            try {
+                const rect = selection.getRangeAt(0).getBoundingClientRect();
+                let bestDist = Infinity;
+                allSpans.forEach(span => {
+                    const sRect = span.getBoundingClientRect();
+                    const d = Math.abs(sRect.left - rect.left) + Math.abs(sRect.top - rect.top);
+                    if (d < bestDist) { bestDist = d; context = span.textContent; }
+                });
+            } catch (e) {}
+        }
+        const lowerWord = word.toLowerCase();
+        if (vocabulary.some(v => v.word.toLowerCase() === lowerWord)) { showToast('该词已在生词本中'); return; }
+        vocabulary.push({ word: word, context: context || '（无上下文句子）' });
+        saveVocab(); renderVocab(); showToast('已加入生词本');
+    }
+
+    function saveVocab() { try { localStorage.setItem('vocabulary', JSON.stringify(vocabulary)); } catch (e) { console.log('saveVocab:', e); showToast('保存失败'); } }
+
+    function renderVocab() {
+        if (!vocabBar) return;
+        vocabBar.innerHTML = '';
+        const title = document.createElement('span'); title.className = 'vocab-title'; title.textContent = '生词本'; vocabBar.appendChild(title);
+        cycleBtn.textContent = isCyclingVocab ? '停止循环' : '循环朗读生词本';
+        cycleBtn.className = 'cycle-btn' + (isCyclingVocab ? ' cycling' : '');
+        vocabBar.appendChild(cycleBtn);
+        if (vocabulary.length === 0) { const empty = document.createElement('span'); empty.textContent = '（空）'; empty.style.color = '#999'; vocabBar.appendChild(empty); return; }
+        vocabulary.slice().reverse().forEach((item, i) => {
+            const div = document.createElement('div'); div.className = 'vocab-item';
+            const originalIndex = vocabulary.length - 1 - i;
+            const wordSpan = document.createElement('span'); wordSpan.className = 'word'; wordSpan.textContent = item.word; div.appendChild(wordSpan);
+            const removeBtn = document.createElement('span'); removeBtn.className = 'remove'; removeBtn.textContent = '×'; removeBtn.dataset.index = originalIndex; div.appendChild(removeBtn);
+            const speakBtn = document.createElement('button'); speakBtn.className = 'vocab-speak'; speakBtn.textContent = '🔊'; speakBtn.dataset.word = item.word; div.appendChild(speakBtn);
+            vocabBar.appendChild(div);
+        });
+        vocabBar.querySelectorAll('.remove').forEach(b => { b.addEventListener('click', () => { const idx = parseInt(b.dataset.index); if (idx >= 0 && idx < vocabulary.length) { vocabulary.splice(idx, 1); saveVocab(); renderVocab(); } }); });
+        vocabBar.querySelectorAll('.vocab-speak').forEach(b => { b.addEventListener('click', () => { const w = b.dataset.word; if (w) speakSingleWord(w); }); });
+        cycleBtn.addEventListener('click', toggleCycleVocab);
+    }
+
+    try { const saved = localStorage.getItem('vocabulary'); if (saved) vocabulary = JSON.parse(saved); } catch (e) { console.log('localStorage:', e); }
+    renderVocab();
+
+    // ============ 18. 单词单独朗读（保留，不动）============
+    function speakSingleWord(word) {
+        stopCycleTTS();
+        stopAllTTS();
+        try {
+            const utterance = new SpeechSynthesisUtterance(word);
+            utterance.rate = parseFloat(speedSlider.value) || 1.0;
+            utterance.volume = 1.0;
+            const voiceName = voiceSelect.value;
+            if (voiceName && voiceName.length > 0) {
+                const voices = speechSynthesis.getVoices();
+                const voice = voices.find(v => v.name === voiceName);
+                if (voice) utterance.voice = voice;
+            }
+            utterance.onend = () => { currentUtterance = null; };
+            utterance.onerror = (e) => {
+                if (e.error === 'interrupted' || e.error === 'canceled') return;
+                console.log('speakSingleWord:', e);
+                stopAllTTS();
+            };
+            speechSynthesis.speak(utterance);
+            currentUtterance = utterance;
+        } catch (e) {
+            console.log('speakSingleWord:', e);
+            stopAllTTS();
+        }
+    }
+
+    // ============ 19. 生词本循环朗读（隔离状态，单向调用）============
+    function toggleCycleVocab() {
+        if (isCyclingVocab) { stopCycleTTS(); return; }
+        if (vocabulary.length === 0) { showToast('生词本为空'); return; }
+        stopFullTextTTS();
+        startCycleTTS();
+    }
+    function startCycleTTS() {
+        isCyclingVocab = true;
+        cycleIndex = 0;
+        cycleBtn.textContent = '停止循环';
+        cycleBtn.classList.add('cycling');
+        speakNextCycleWord();
+    }
+    function stopCycleTTS() {
+        isCyclingVocab = false;
+        cycleBtn.textContent = '循环朗读生词本';
+        cycleBtn.classList.remove('cycling');
+        if (cycleTimer) { clearTimeout(cycleTimer); cycleTimer = null; }
+        stopAllTTS();
+    }
+    function stopFullTextTTS() {
+        isReadingText = false;
+        fullTextChunks = [];
+        currentChunkIndex = 0;
+        if (fullTextTimer) { clearTimeout(fullTextTimer); fullTextTimer = null; }
+        stopAllTTS();
+    }
+    function speakNextCycleWord() {
+        if (!isCyclingVocab) return;
+        if (cycleIndex >= vocabulary.length) cycleIndex = 0;
+        const word = vocabulary[cycleIndex].word;
+        cycleIndex++;
+        stopAllTTS();
+        try {
+            const utterance = new SpeechSynthesisUtterance(word);
+            utterance.rate = parseFloat(speedSlider.value) || 1.0;
+            utterance.volume = 1.0;
+            const voiceName = voiceSelect.value;
+            if (voiceName && voiceName.length > 0) {
+                const voices = speechSynthesis.getVoices();
+                const voice = voices.find(v => v.name === voiceName);
+                if (voice) utterance.voice = voice;
+            }
+            utterance.onend = () => {
+                currentUtterance = null;
+                if (isCyclingVocab) {
+                    cycleTimer = setTimeout(() => { speakNextCycleWord(); }, 800);
+                }
+            };
+            utterance.onerror = (e) => {
+                currentUtterance = null;
+                if (e.error === 'interrupted' || e.error === 'canceled') return;
+                console.log('cycle onerror:', e);
+                if (isCyclingVocab) {
+                    cycleTimer = setTimeout(() => { speakNextCycleWord(); }, 800);
+                }
+            };
+            speechSynthesis.speak(utterance);
+            currentUtterance = utterance;
+        } catch (e) {
+            console.log('speakNextCycleWord:', e);
+            if (isCyclingVocab) {
+                cycleTimer = setTimeout(() => { speakNextCycleWord(); }, 800);
+            }
+        }
+    }
+
+    // ============ 20. 模式切换与复习卡片 ============
+    function switchMode(mode) {
+        currentMode = mode;
+        if (mode === 'read') {
+            modeReadBtn.classList.add('active');
+            modeReviewBtn.classList.remove('active');
+            textArea.classList.remove('hidden');
+            reviewPanel.classList.add('hidden');
+            cardWord.textContent = '';
+            pronounceRow.innerHTML = '';
+            cardDef.innerHTML = '';
+            cardLoading.innerHTML = '';
+            cardEmpty.style.display = 'none';
+        } else {
+            modeReadBtn.classList.remove('active');
+            modeReviewBtn.classList.add('active');
+            textArea.classList.add('hidden');
+            reviewPanel.classList.remove('hidden');
+            loadReviewWords();
+            showReviewCard();
+        }
+    }
+
+    modeReadBtn.addEventListener('click', () => switchMode('read'));
+    modeReviewBtn.addEventListener('click', () => switchMode('review'));
+
+    // 复习卡片：加载生词本副本，初始化本轮复习池（按权重）
+    function loadReviewWords() {
+        reviewWords = [...vocabulary];
+        retiredThisRound = new Set();
+        // 初始化本轮复习池：排除已标记为“太简单”的词（权重为 1 且已退出）
+        reviewPool = reviewWords.filter(w => {
+            return !(wordLevels[w.word] === 2);
+        });
+        currentReviewWord = null;
+    }
+
+    // 按权重加权随机抽取下一个单词（排除本轮已退出的词）
+    function pickNextWord() {
+        const candidates = reviewPool.filter(w => !retiredThisRound.has(w.word));
+        if (candidates.length === 0) {
+            // 本轮全部退出，重置池子重新开始（保留退出标记，避免无限循环时全部退出）
+            if (reviewPool.length === 0) return null;
+            // 若全部被退出，清空退出集重新进入下一轮
+            retiredThisRound.clear();
+            return pickNextWord();
+        }
+        // 计算总权重
+        let totalWeight = 0;
+        for (const w of candidates) {
+            totalWeight += getWordWeight(w.word);
+        }
+        let random = Math.random() * totalWeight;
+        for (const w of candidates) {
+            const weight = getWordWeight(w.word);
+            random -= weight;
+            if (random <= 0) return w;
+        }
+        return candidates[candidates.length - 1];
+    }
+
+    // 获取单词权重：优先用 wordWeights，没有则按 level 推断（不认识=5，模糊=3，太简单=1）
+    function getWordWeight(word) {
+        if (wordWeights[word] !== undefined) return wordWeights[word];
+        const level = wordLevels[word] || 0;
+        return level === 0 ? 5 : level === 1 ? 3 : 1;
+    }
+
+    // 复习卡片：显示当前单词（单面布局，无翻转）
+    function showReviewCard() {
+        cardWord.textContent = '';
+        pronounceRow.innerHTML = '';
+        cardDef.innerHTML = '';
+        cardLoading.innerHTML = '';
+        cardEmpty.style.display = 'none';
+
+        // 重置按钮状态
+        lvl0Btn.classList.remove('selected');
+        lvl1Btn.classList.remove('selected');
+        lvl2Btn.classList.remove('selected');
+
+        if (!reviewWords || reviewWords.length === 0) {
+            cardEmpty.style.display = 'block';
+            addDefBtn.style.display = 'none';
+            lvl0Btn.style.display = 'none';
+            lvl1Btn.style.display = 'none';
+            lvl2Btn.style.display = 'none';
+            currentReviewWord = null;
+            return;
+        }
+
+        // 抽取下一个单词
+        const next = pickNextWord();
+        if (!next) {
+            cardEmpty.style.display = 'block';
+            cardEmpty.textContent = '本轮全部已退出，请重新进入复习模式';
+            addDefBtn.style.display = 'none';
+            lvl0Btn.style.display = 'none';
+            lvl1Btn.style.display = 'none';
+            lvl2Btn.style.display = 'none';
+            currentReviewWord = null;
+            return;
+        }
+
+        currentReviewWord = next;
+        addDefBtn.style.display = 'inline-block';
+        lvl0Btn.style.display = 'inline-block';
+        lvl1Btn.style.display = 'inline-block';
+        lvl2Btn.style.display = 'inline-block';
+
+        const word = currentReviewWord.word;
+        cardWord.textContent = word;
+
+        // 检查是否已有释义缓存（优先显示本地用户添加的中文释义）
+        const cached = wordDefinitions[word];
+        const cachedDefTooLong = cached && cached.def && cached.def.length > 50;
+        const hasCachedZh = cached && cached.zh && cached.zh !== '翻译请求超时' && cached.zh !== '暂无中文翻译';
+        if (cached && !cachedDefTooLong && hasCachedZh) {
+            // 有缓存且中文翻译有效，直接渲染，无需查词
+            renderCard(word, cached.phonetic, cached.pos, cached.def, cached.zh);
+        } else {
+            // 无缓存或缓存中文翻译无效或英文释义过长（旧缓存），重新查词
+            cardLoading.innerHTML = `
+                <div class="card-loading">
+                    <div class="loading-spinner"></div>
+                    <span>查询释义中，请稍候...</span>
+                </div>
+            `;
+            fetchDefinition(word).then(result => {
+                cardLoading.innerHTML = '';
+                if (result && result.found) {
+                    wordDefinitions[word] = result;
+                    savePersistentData();
+                    renderCard(word, result.phonetic, result.pos, result.def, result.zh);
+                } else {
+                    cardDef.innerHTML = `<div class="card-def">暂无释义，点击手动添加</div>`;
+                    addSpeakBtn(word);
+                }
+            }).catch(() => {
+                cardLoading.innerHTML = '';
+                cardDef.innerHTML = `<div class="card-def">暂无释义，点击手动添加</div>`;
+                addSpeakBtn(word);
+            });
+        }
+
+        // 高亮对应熟练度按钮
+        const currentLevel = wordLevels[word] || 0;
+        if (currentLevel === 0) lvl0Btn.classList.add('selected');
+        else if (currentLevel === 1) lvl1Btn.classList.add('selected');
+        else if (currentLevel === 2) lvl2Btn.classList.add('selected');
+    }
+
+    // 渲染单面卡片内容
+    function renderCard(word, phonetic, pos, defEn, defZh) {
+        // 单词：彻底强行放大，直接内联样式
+        cardWord.textContent = word;
+        cardWord.style.cssText = 'font-size: 56px !important; font-weight: 800; color: #fff; margin-bottom: 10px; word-break: break-word;';
+        cardLoading.innerHTML = '';
+
+        // 构建音标 + 发音按钮行（音标和喇叭强制缩小，直接内联样式）
+        pronounceRow.innerHTML = '';
+        if (phonetic) {
+            const phSpan = document.createElement('span');
+            phSpan.textContent = `[${phonetic}]`;
+            phSpan.className = 'card-phonetic';
+            phSpan.style.cssText = 'font-size: 16px !important; color: #aaa; margin-bottom: 20px;';
+            pronounceRow.appendChild(phSpan);
+        }
+
+        // 发音按钮（小图标形式），强制缩小
+        const speakBtn = document.createElement('button');
+        speakBtn.textContent = '🔊';
+        speakBtn.className = 'add-def-btn';
+        speakBtn.style.cssText = 'font-size: 16px !important; color: #aaa; margin-bottom: 20px; padding: 4px 8px; border: none; background: transparent; cursor: pointer;';
+        speakBtn.onclick = (e) => {
+            e.stopPropagation();
+            speakSingleWord(word);
+        };
+        pronounceRow.appendChild(speakBtn);
+
+        // 释义区域：同义词（英文，简洁，同行逗号隔开）+ 中文翻译（必现）
+        let defHtml = '';
+        if (defEn) {
+            defHtml += `<div class="card-def-syn" style="font-size:14px;color:#999999;line-height:1.5;word-break:break-all;margin-bottom:8px;">同义词：${defEn}</div>`;
+        }
+        const isZhError = !defZh || defZh === '翻译请求超时' || defZh === '暂无中文翻译';
+        defHtml += `<div id="zhMeaning" style="color:${isZhError ? '#999999' : '#4db8ff'};font-size:18px;font-weight:bold;margin-top:10px;word-break:break-word;">${defZh || '加载中...'}</div>`;
+        cardDef.innerHTML = defHtml || `<div class="card-def">暂无释义，点击手动添加</div>`;
+    }
+
+    // 仅添加发音按钮（用于无释义时的兜底），强制缩小
+    function addSpeakBtn(word) {
+        pronounceRow.innerHTML = '';
+        const speakBtn = document.createElement('button');
+        speakBtn.textContent = '🔊';
+        speakBtn.className = 'add-def-btn';
+        speakBtn.style.cssText = 'font-size: 16px !important; color: #aaa; margin-bottom: 20px; padding: 4px 8px; border: none; background: transparent; cursor: pointer;';
+        speakBtn.onclick = (e) => {
+            e.stopPropagation();
+            speakSingleWord(word);
+        };
+        pronounceRow.appendChild(speakBtn);
+        cardDef.innerHTML = '';
+    }
+
+    // 自动查词 API（英文词典 + Google 中文翻译，3秒熔断 + 8秒总超时，Promise.all 并发）
+    async function fetchDefinition(word) {
+        console.log('开始查词：', word);
+
+        // 对多词短语：优先用完整短语查询，失败则只取第一个单词
+        const queryWords = word.trim().split(/\s+/);
+        const firstWord = queryWords[0];
+        const queries = [word.trim(), firstWord];
+
+        // 带 3 秒超时熔断的 fetch 封装
+        function fetchWithTimeout3s(url) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 3000);
+            return fetch(url, { signal: controller.signal })
+                .finally(() => clearTimeout(timer));
+        }
+
+        // ========== 任务1：英文词典（dictionaryapi.dev，3秒熔断） ==========
+        const dictTask = (async () => {
+            for (const q of queries) {
+                try {
+                    console.log('词典API请求：', q);
+                    const response = await fetchWithTimeout3s(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(q)}`);
+                    if (response.status === 404) {
+                        console.log('词典API返回：', q, '查无此词');
+                        continue;
+                    }
+                    if (!response.ok) {
+                        console.log('词典API返回：', q, '状态', response.status);
+                        continue;
+                    }
+                    const data = await response.json();
+                    if (!data || data.length === 0) {
+                        console.log('词典API返回：', q, '无数据');
+                        continue;
+                    }
+                    const entry = data[0];
+                    const phonetic = entry.phonetic || '';
+                    let pos = '';
+                    let def = '';
+                    if (entry.meanings && entry.meanings.length > 0) {
+                        const firstMeaning = entry.meanings[0];
+                        pos = firstMeaning.partOfSpeech || '';
+                        // 提取同义词（2-3个短单词），过滤掉长句子，替代长篇英文解释
+                        const synonyms = firstMeaning.synonyms || [];
+                        const synList = synonyms
+                            .filter(s => s && s.length > 0 && s.length <= 20)
+                            .slice(0, 3);
+                        def = synList.length > 0 ? synList.join('，') : '';
+                    }
+                    console.log('词典API返回：', q, { phonetic, pos, def, synonyms: entry.meanings[0]?.synonyms });
+                    return { phonetic, pos, def, source: 'dictionaryapi' };
+                } catch (error) {
+                    console.log('词典API请求失败：', q, error);
+                    continue;
+                }
+            }
+            return { phonetic: '', pos: '', def: '', source: 'dictionaryapi' };
+        })();
+
+        // ========== 任务2：中文翻译（Google 翻译接口，3秒熔断，必须渲染） ==========
+        const transTask = (async () => {
+            try {
+                console.log(' 🔥 开始请求中文...', word);
+                const transRes = await fetchWithTimeout3s(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-CN&dt=t&q=${encodeURIComponent(word)}`);
+                const transData = await transRes.json();
+                console.log(' ✅ 翻译成功或报错', transData);
+                let zhText = '翻译请求超时';
+                if (Array.isArray(transData) && transData[0] && transData[0][0] && transData[0][0][0]) {
+                    zhText = transData[0][0][0];
+                }
+                return zhText;
+            } catch (e) {
+                console.log(' ✅ 翻译成功或报错', e);
+                return '翻译请求超时';
+            }
+        })();
+
+        // ========== Promise.all 并发等待（带 8 秒总超时，防止挂起） ==========
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('查词总超时')), 8000);
+        });
+        const [dictResult, zhTranslation] = await Promise.race([
+            Promise.all([dictTask, transTask]),
+            timeoutPromise
+        ]);
+
+        const hasDef = dictResult && dictResult.def && dictResult.def.trim().length > 0;
+        const hasZh = zhTranslation && zhTranslation !== '翻译请求超时' && zhTranslation !== '暂无中文翻译';
+
+        // 兜底：如果英文和中文都没查到，返回 not_found
+        if (!hasDef && !hasZh) {
+            console.log('[翻译失败] 英文和中文都查无此词：', word);
+            return { found: false, status: 'not_found' };
+        }
+
+        console.log('查词完成：', word, '英文释义=', dictResult.def, '中文翻译=', zhTranslation);
+
+        return {
+            found: true,
+            status: 'ok',
+            phonetic: dictResult.phonetic,
+            pos: dictResult.pos,
+            def: dictResult.def,
+            zh: hasZh ? zhTranslation : '暂无中文翻译',
+            source: dictResult.source || 'google'
+        };
+    }
+
+    // 点击卡片不再翻转，改为直接点击发音（可选交互）
+    reviewCard.addEventListener('click', (e) => {
+        // 不触发翻转，单面卡片直接显示所有内容
+        // 如果点击在发音按钮上，由按钮自身处理
+    });
+
+    // 切换单词时累加今日复习计数
+    function incrementDailyReview() {
+        dailyReviewCount++;
+        updateReviewStats();
+        savePersistentData();
+    }
+
+    // 上一个（按权重重新抽词）
+    cardPrev.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (reviewWords.length === 0) return;
+        incrementDailyReview();
+        showReviewCard();
+    });
+
+    // 下一个（按权重重新抽词）
+    cardNext.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (reviewWords.length === 0) return;
+        incrementDailyReview();
+        showReviewCard();
+    });
+
+    // 添加释义按钮
+    addDefBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!currentReviewWord) return;
+        const word = currentReviewWord.word;
+        const userDef = prompt(`请为单词 "${word}" 输入中文释义：`);
+        if (userDef !== null && userDef.trim() !== '') {
+            wordDefinitions[word] = {
+                phonetic: '',
+                pos: '',
+                def: '',
+                zh: userDef.trim()
+            };
+            savePersistentData();
+            renderCard(word, '', '', '', userDef.trim());
+            showToast('释义已保存');
+        }
+    });
+
+    // 记忆分级按钮（点击后自动按权重切到下一张）
+    lvl0Btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setWordLevel(0);
+    });
+    lvl1Btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setWordLevel(1);
+    });
+    lvl2Btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setWordLevel(2);
+    });
+
+    function setWordLevel(level) {
+        if (!currentReviewWord) return;
+        const word = currentReviewWord.word;
+        wordLevels[word] = level;
+        // 权重机制：不认识=5，模糊=3，太简单=1
+        wordWeights[word] = level === 0 ? 5 : level === 1 ? 3 : 1;
+        savePersistentData();
+        // 高亮按钮
+        lvl0Btn.classList.remove('selected');
+        lvl1Btn.classList.remove('selected');
+        lvl2Btn.classList.remove('selected');
+        if (level === 0) lvl0Btn.classList.add('selected');
+        else if (level === 1) lvl1Btn.classList.add('selected');
+        else if (level === 2) lvl2Btn.classList.add('selected');
+        showToast(`已标记：${word} - ${level === 0 ? '不认识' : level === 1 ? '模糊' : '太简单'}`);
+        // 分级后自动切换下一张（不等待点击下一个）
+        incrementDailyReview();
+        // 点【太简单】后，该词在本轮不再出现
+        if (level === 2) {
+            retiredThisRound.add(word);
+        }
+        showReviewCard();
+    }
+
+    // ============ 21. 划词交互（保留，不动）============
+    textArea.addEventListener('mouseup', (e) => { const selection = window.getSelection(); if (selection && selection.toString().trim().length > 0) selectionMark.style.display = 'block'; });
+    selectionMark.addEventListener('click', (e) => { e.stopPropagation(); addToVocabFromSelection(); selectionMark.style.display = 'none'; });
+    document.addEventListener('click', (e) => { if (!e.target.closest('#textArea') && !e.target.closest('.select-btn') && !e.target.closest('#vocabBar')) selectionMark.style.display = 'none'; });
+    document.addEventListener('keydown', (e) => { if (e.code === 'Escape') { stopAllTTS(); selectionMark.style.display = 'none'; } });
+
+    // ============ 22. Toast（保留，不动）============
+    function showToast(msg) { toast.textContent = msg; toast.classList.add('visible'); setTimeout(() => toast.classList.remove('visible'), 3000); }
+
+    // ============ 23. 主题（保留，不动）============
+    const themeToggle = document.getElementById('themeToggle');
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme) document.body.setAttribute('data-theme', savedTheme);
+    themeToggle.addEventListener('click', () => { const cur = document.body.getAttribute('data-theme'); const nxt = cur === 'light' ? 'dark' : 'light'; document.body.setAttribute('data-theme', nxt); localStorage.setItem('theme', nxt); });
+
+    // ============ 24. Shift + 滚轮缩放正文字体（新增，不影响 TTS 逻辑）============
+    let currentFontSize = 18;
+    textArea.addEventListener('wheel', (e) => {
+        if (e.shiftKey) {
+            e.preventDefault();
+            if (e.deltaY < 0) {
+                currentFontSize = Math.min(currentFontSize + 1, 36);
+            } else if (e.deltaY > 0) {
+                currentFontSize = Math.max(currentFontSize - 1, 14);
+            }
+            textArea.style.fontSize = currentFontSize + 'px';
+        }
+    }, { passive: false });
+
+    console.log('英语阅读助手已加载（含复习模式 + 自动查词 + 记忆分级 + PWA）');
+
+    // ============ PWA Service Worker 注册 ============
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+                .then(reg => console.log('SW 注册成功:', reg.scope))
+                .catch(err => console.log('SW 注册失败:', err));
+        });
+    }
+</script>
+
+</body>
+</html>
