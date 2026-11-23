@@ -420,22 +420,44 @@
         }
         .sentence { -webkit-user-select: text; user-select: text; }
 
-        /* 控制栏触屏友好：按钮加大、扩大点击热区 */
-        .control-bar { gap: 10px; padding: 12px 16px; }
+        /* 控制栏触屏友好：按钮加大、扩大点击热区（移动端压缩高度） */
+        .control-bar { gap: 6px; padding: 6px 12px; }
+        .control-bar h1 { font-size: 15px; margin: 0; }
         .upload-btn, .control-btn, .mode-btn, #themeToggle {
-            min-height: 44px;
-            min-width: 44px;
-            font-size: 14px;
-            padding: 10px 14px;
-        }
-        .speed-control input[type="range"] { width: 200px; height: 44px; }
-        .speed-value { font-size: 14px; }
-
-        /* 下拉选择加大 */
-        .encoding-select, .voice-select {
-            min-height: 44px;
-            font-size: 14px;
+            min-height: 40px;
+            min-width: 40px;
+            font-size: 13px;
             padding: 8px 12px;
+        }
+        .speed-control input[type="range"] { width: 140px; height: 40px; }
+        .speed-value { font-size: 13px; }
+
+        /* 下拉选择更小 */
+        .encoding-select, .voice-select {
+            min-height: 40px;
+            font-size: 13px;
+            padding: 6px 10px;
+        }
+
+        /* 隐藏底部生词本条 */
+        #vocabBar { display: none !important; }
+
+        /* 复习模式循环播放按钮 */
+        .review-cycle-btn {
+            background: var(--accent-color);
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 10px auto 0 auto;
+            display: block;
+            width: fit-content;
+        }
+        .review-cycle-btn.cycling {
+            animation: pulse 1.5s infinite;
         }
 
         /* 复习卡片：响应式宽度，适配手机 */
@@ -477,12 +499,12 @@
         #vocabBar { padding: 12px; gap: 10px; }
         .vocab-speak { width: 32px; height: 32px; font-size: 16px; line-height: 32px; }
 
-        /* 正文自动换行，适配屏幕 */
+        /* 正文自动换行，适配屏幕（移动端压缩内边距，显示更多内容） */
         #textArea {
             width: 100%;
             max-width: 100%;
-            margin: 16px auto;
-            padding: 16px;
+            margin: 12px auto;
+            padding: 12px;
             font-size: 16px;
             line-height: 1.8;
         }
@@ -556,6 +578,7 @@
     <div class="card-nav">
         <button class="card-btn" id="cardPrev">上一个</button>
         <button class="card-btn" id="cardNext">下一个</button>
+        <button class="review-cycle-btn" id="reviewCycleBtn">⏯ 循环播放</button>
     </div>
     <div class="nav-spacer" style="height: 100px;"></div>
     <div id="cardEmpty" style="display:none; color:#888; margin-top:20px;">暂无生词，请先阅读划词</div>
@@ -1625,6 +1648,23 @@
         if (level === 2) { retiredThisRound.add(word); }
         showReviewCard();
     }
+
+    // ============ 复习模式循环播放按钮 ============
+    const reviewCycleBtn = document.getElementById('reviewCycleBtn');
+    reviewCycleBtn.addEventListener('click', () => {
+        if (isCyclingVocab) {
+            stopCycleTTS();
+            reviewCycleBtn.classList.remove('cycling');
+            return;
+        }
+        if (vocabulary.length === 0) {
+            showToast('生词本为空');
+            return;
+        }
+        stopFullTextTTS();
+        startCycleTTS();
+        reviewCycleBtn.classList.add('cycling');
+    });
 
     // ============ 23. 划词交互（PC + 手机触摸） ============
     function updateSelectionMark() {
