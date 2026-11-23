@@ -517,7 +517,7 @@
         <button class="control-btn" id="pauseBtn" style="display: none;">暂停</button>
         <button class="control-btn" id="stopBtn" style="display: none;">停止</button>
     </div>
-    <select class="voice-select" id="voiceSelect"><option value="">加载语音中...</option></select>
+    <select class="voice-select" id="voiceSelect"><option value="">使用系统默认语音</option></select>
     <div class="speed-control">
         <input type="range" id="speedSlider" min="0.5" max="1.5" step="0.1" value="1">
         <span class="speed-value" id="speedValue">1.0x</span>
@@ -644,16 +644,15 @@
 
     function loadVoices() {
         const voices = speechSynthesis.getVoices();
-        voiceSelect.innerHTML = '<option value="">使用系统默认语音</option>';
+        // 只有当检测到语音时才更新下拉框，否则保持"使用系统默认语音"
         if (voices.length > 0) {
+            voiceSelect.innerHTML = '<option value="">使用系统默认语音</option>';
             voices.forEach(v => {
                 const o = document.createElement('option');
                 o.value = v.name;
                 o.textContent = v.name + ' (' + v.lang + ')';
                 voiceSelect.appendChild(o);
             });
-        } else {
-            voiceSelect.innerHTML = '<option value="">无可用语音</option>';
         }
         voicesLoaded = true;
     }
@@ -1163,11 +1162,7 @@
             showToast('请先上传文件'); return;
         }
         loadVoices();
-        const voices = speechSynthesis.getVoices();
-        if (voices.length === 0) {
-            showToast('当前浏览器未检测到可用语音，请稍后再试');
-            return;
-        }
+        // 兜底：即使检测不到语音列表，也直接尝试使用浏览器默认语音播放
         if (isReadingText) {
             speechSynthesis.cancel();
             isReadingText = false;
